@@ -197,3 +197,24 @@ class WRFInputDeck(object):
         self.erf_input['erf.most.z0'] = z0mean
         
 
+class RealSounding(object):
+    """Class to extract soundings from WPS output"""
+
+    def __init__(self,met_em_path):
+        self.load_met_em(met_em_path)
+
+    def load_met_em(self,fpath):
+        ds = xr.open_dataset(fpath)
+        self.U = ds['UU'] # staggered in west_east dir [m/s]
+        self.V = ds['VV'] # staggered in south_north dir [m/s]
+        self.P = ds['PRES'] # unstaggered [Pa]
+        self.T = ds['TT'] # unstaggered [K]
+        self.RH = ds['RH'] # unstaggered [%]
+        # see https://github.com/a2e-mmc/mmctools/blob/master/mmctools/helper_functions.py#L104
+        #   for calculating vapor mixing ratio
+        # see https://github.com/a2e-mmc/mmctools/blob/master/mmctools/helper_functions.py#L76
+        #   for calculating virtual temperature (to get virtual potential temperature)
+
+    def write(self,soundingfile):
+        print('Wrote',soundingfile)
+
