@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import f90nml
+import cartopy.crs as ccrs
 
 from .wrf.namelist import (TimeControl, Domains, Physics, Dynamics,
                            BoundaryControl)
@@ -197,3 +198,87 @@ class WRFInputDeck(object):
         self.erf_input['erf.most.z0'] = z0mean
         
 
+class LambertConformalGrid(object):
+    """Given WRF projection parameters, setup a projection and calculate
+    map scale factors
+    """
+    def __init__(self,
+                 ref_lat, ref_lon,
+                 truelat1, truelat2=None,
+                 stand_lon=None,
+                 dx=None, dy=None,
+                 nx=None, ny=None,
+                 earth_radius=6370000.):
+        """Initialize projection on a spherical datum with grid centered
+        at (ref_lat, ref_lon).
+
+        Parameters
+        ----------
+        ref_lat, ref_lon: float
+            Central latitude and longitude in degrees
+        truelat1, truelat2: float
+            Standard parallel(s) at which the map scale is unity
+        stand_lon: float, optional
+            Central meridian
+        dx, dy : float
+            Grid spacing in west-east, south-north directions
+        nx, ny : int
+            Number of cells in the west-east, south-north directions
+        earth_radius: float
+            Radius of the earth approximated as a sphere
+        """
+        self.ref_lat = ref_lat
+        self.ref_lon = ref_lon
+        if (truelat2 is None):
+            truelat2 = truelat1
+            standard_parallels = [truelat1]
+        else:
+            standard_parallels = [truelat1,truelat2]
+        self.truelat1 = truelat1
+        self.truelat2 = truelat2
+        if stand_lon is None:
+            stand_lon = ref_lon
+        self.dx = dx
+        self.dy = dy
+        self.nx = nx
+        self.ny = ny
+        self.proj = ccrs.LambertConformal(
+            central_longitude=stand_lon,
+            central_latitude=ref_lat,
+            standard_parallels=standard_parallels,
+            globe=ccrs.Globe(
+                ellipse="sphere",
+                semimajor_axis=earth_radius,
+                semiminor_axis=earth_radius,
+            ),
+        )
+
+    def setup_grid(self):
+        assert self.dx is not None
+        if self.dy is None:
+            self.dy = self.dx
+        assert (self.nx is not None) and (self.ny is not None)
+
+        self.x0, self.y0 = self.proj.transform_point(
+                self.ref_lon, self.ref_lat, ccrs.Geodetic())
+
+        xlo = self.x0 - (self.nx)/2*self.dx
+        ylo = self.y0 - (self.ny)/2*self.dy
+        self.x = np.arange(self.nx+1)*self.dx + xlo
+        self.y = np.arange(self.ny+1)*self.dy + ylo
+        self.x_destag = (np.arange(self.nx)+0.5)*self.dx + xlo
+        self.y_destag = (np.arange(self.ny)+0.5)*self.dy + ylo
+
+    def calc_lat_lon(self,stagger=None):
+        if not hasattr(self,'x'):
+            self.setup_grid()
+        if stagger=='U':
+            xx,yy = np.meshgrid(self.x, self.y_destag)
+        elif stagger=='V':
+            xx,yy = np.meshgrid(self.x_destag, self.y)
+        else:
+            xx,yy = np.meshgrid(self.x_destag, self.y_destag)
+        lonlat = ccrs.Geodetic().transform_points(self.proj, xx.ravel(), yy.ravel())
+        lon = lonlat[:,0].reshape(xx.shape)
+        lat = lonlat[:,1].reshape(xx.shape)
+        return lat,lon
