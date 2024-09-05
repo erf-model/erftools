@@ -229,8 +229,8 @@ class LambertConformalGrid(object):
         """
         self.ref_lat = ref_lat
         self.ref_lon = ref_lon
-        if (truelat2 is None):
-            truelat2 = truelat1
+        if (truelat2 is None) or (truelat2==truelat1):
+            truelat2 = None
             standard_parallels = [truelat1]
         else:
             standard_parallels = [truelat1,truelat2]
@@ -282,3 +282,19 @@ class LambertConformalGrid(object):
         lon = lonlat[:,0].reshape(xx.shape)
         lat = lonlat[:,1].reshape(xx.shape)
         return lat,lon
+
+    def calc_msf(self,lat):
+        """From WRF WPS process_tile_module.F"""
+        if self.truelat2 is None:
+            colat0 = np.radians(90.0 - self.truelat1)
+            colat  = np.radians(90.0 - lat)
+            return np.sin(colat0)/np.sin(colat) \
+                    * (np.tan(colat/2.0)/np.tan(colat0/2.0))**np.cos(colat0)
+        else:
+            colat1 = np.radians(90.0 - self.truelat1)
+            colat2 = np.radians(90.0 - self.truelat2)
+            n = (np.log(np.sin(colat1))     - np.log(np.sin(colat2))) \
+              / (np.log(np.tan(colat1/2.0)) - np.log(np.tan(colat2/2.0)))
+            colat  = np.radians(90.0 - lat)
+            return np.sin(colat2)/np.sin(colat) \
+                    * (np.tan(colat/2.0)/np.tan(colat2/2.0))**n
