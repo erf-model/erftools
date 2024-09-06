@@ -252,6 +252,8 @@ class LambertConformalGrid(object):
                 semiminor_axis=earth_radius,
             ),
         )
+        if self.dx and self.nx and self.ny:
+            self.setup_grid()
 
     def setup_grid(self):
         assert self.dx is not None
