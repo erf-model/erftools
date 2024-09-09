@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 
 from .constants import R_d, Cp_d, Gamma, CONST_GRAV, p_0
 from .wrf.constants import rvovrd, cvpm
+from .EOS import getRhogivenThetaPress
+from .HSE import Newton_Raphson_hse
 
 
 class InputSounding(object):
@@ -41,6 +43,13 @@ class InputSounding(object):
                 u_profile = np.zeros_like(z_profile)
             if v_profile is None:
                 v_profile = np.zeros_like(z_profile)
+            if z_profile[0] > 0:
+                # prepend surface values
+                z_profile  = np.concatenate(([0.0],    z_profile ))
+                th_profile = np.concatenate(([th_surf],th_profile))
+                qv_profile = np.concatenate(([qv_surf],qv_profile))
+                u_profile  = np.concatenate(([0.0],    u_profile ))
+                v_profile  = np.concatenate(([0.0],    v_profile ))
             assert len(z_profile) \
                     == len(th_profile) == len(qv_profile) \
                     == len(u_profile) == len(v_profile)
@@ -102,6 +111,8 @@ class InputSounding(object):
           density is dry; but the integration starts with rho_surf that
           is moist... (calculated from total p, moist theta on the
           surface)
+
+        DEPRECATED
         """
         qvf = 1. + rvovrd*self.qv[0]
         rho_surf = 1. / ((R_d/p_0)*self.th_surf*qvf*((self.p_surf/p_0)**cvpm))
@@ -194,6 +205,8 @@ class InputSounding(object):
 
         This returns profiles of total density, moist theta as defined
         above, water vapor mixing ratio, and horizontal wind components.
+
+        DEPRECATED
         """
         #qvf = 1. + rvovrd*self.qv[0] # WRF
         qvf = 1. + (rvovrd-1)*self.qv_surf
@@ -284,6 +297,53 @@ class InputSounding(object):
                 'v': self.v,
             },
             index=pd.Index(self.z,name='z'))
+
+
+    def calc_rho_p(self,tol=1e-12,eps=1e-6,verbose=False):
+        """Integrate moist soinding hydrostatically, starting from the
+        specified surface pressure
+
+        New implementation uses Newton-Raphson iteration
+        """
+        N = len(self.th)
+        self.rhod = np.zeros(N)
+        self.pm = np.zeros(N)
+
+        self.pm[0] = self.p_surf
+        self.rhod[0] = getRhogivenThetaPress(self.th_surf, self.p_surf,
+                                             qv=self.qv_surf)
+        if verbose:
+            print('Surface pressure, dry density, moist density :',
+                  self.pm[0],self.rhod[0],
+                  self.rhod[0]*(1+self.qv[0]))
+
+        # integrate from surface to domain top
+        for k in range(1,N):
+            dz = self.z[k] - self.z[k-1]
+
+            # Establish known constant
+            rho_tot_lo = self.rhod[k-1] * (1. + self.qv[k-1])
+            C = -self.pm[k-1] + 0.5*rho_tot_lo*CONST_GRAV*dz
+
+            #if verbose: print(f'C = {-self.pm[k-1]} + 0.5*{rho_tot_lo}*g*{dz} = {C}')
+
+            # Initial guess and residual
+            self.pm[k] = self.pm[k-1]
+            self.rhod[k] = getRhogivenThetaPress(self.th[k],
+                                                 self.pm[k],
+                                                 qv=self.qv[k])
+            rho_tot_hi = self.rhod[k] * (1. + self.qv[k])
+            F = self.pm[k] + 0.5*rho_tot_hi*CONST_GRAV*dz + C
+
+            # Do iterations
+            if np.abs(F) > tol:
+                self.pm[k], self.rhod[k] = Newton_Raphson_hse(self.pm[k], # guess
+                                                              F, # initial residual
+                                                              dz, C, # constants
+                                                              self.th[k],
+                                                              self.qv[k],
+                                                              verbose=verbose)
+
 
 
     def plot(self):
