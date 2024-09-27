@@ -17,6 +17,8 @@ class InputSounding(object):
                  z_profile=None,
                  th_profile=None,
                  qv_profile=None,
+                 qc_profile=None,
+                 qr_profile=None,
                  u_profile=None,
                  v_profile=None):
         """File format is described in the WRF User's Guide
@@ -39,6 +41,10 @@ class InputSounding(object):
         elif (z_profile is not None) and (th_profile is not None):
             if qv_profile is None:
                 qv_profile = np.zeros_like(z_profile)
+            if qc_profile is None:
+                qc_profile = np.zeros_like(z_profile)
+            if qr_profile is None:
+                qr_profile = np.zeros_like(z_profile)
             if u_profile is None:
                 u_profile = np.zeros_like(z_profile)
             if v_profile is None:
@@ -48,14 +54,20 @@ class InputSounding(object):
                 z_profile  = np.concatenate(([0.0],    z_profile ))
                 th_profile = np.concatenate(([th_surf],th_profile))
                 qv_profile = np.concatenate(([qv_surf],qv_profile))
+                qc_profile = np.concatenate(([0.0],    qc_profile))
+                qr_profile = np.concatenate(([0.0],    qr_profile))
                 u_profile  = np.concatenate(([0.0],    u_profile ))
                 v_profile  = np.concatenate(([0.0],    v_profile ))
             assert len(z_profile) \
                     == len(th_profile) == len(qv_profile) \
+                    == len(qc_profile) == len(qr_profile) \
                     == len(u_profile) == len(v_profile)
             self.z = z_profile
             self.th = th_profile
             self.qv = qv_profile
+            self.qc = qc_profile
+            self.qr = qr_profile
+            self.qt = self.qv + self.qc + self.qr
             self.u = u_profile
             self.v = v_profile
             self.p_surf = p_surf
@@ -313,16 +325,16 @@ class InputSounding(object):
         self.rhod[0] = getRhogivenThetaPress(self.th_surf, self.p_surf,
                                              qv=self.qv_surf)
         if verbose:
-            print('Surface pressure, dry density, moist density :',
+            print('Surface pressure, dry density, total density :',
                   self.pm[0],self.rhod[0],
-                  self.rhod[0]*(1+self.qv[0]))
+                  self.rhod[0]*(1+self.qt[0]))
 
         # integrate from surface to domain top
         for k in range(1,N):
             dz = self.z[k] - self.z[k-1]
 
             # Establish known constant
-            rho_tot_lo = self.rhod[k-1] * (1. + self.qv[k-1])
+            rho_tot_lo = self.rhod[k-1] * (1. + self.qt[k-1])
             C = -self.pm[k-1] + 0.5*rho_tot_lo*CONST_GRAV*dz
 
             #if verbose: print(f'C = {-self.pm[k-1]} + 0.5*{rho_tot_lo}*g*{dz} = {C}')
@@ -332,7 +344,7 @@ class InputSounding(object):
             self.rhod[k] = getRhogivenThetaPress(self.th[k],
                                                  self.pm[k],
                                                  qv=self.qv[k])
-            rho_tot_hi = self.rhod[k] * (1. + self.qv[k])
+            rho_tot_hi = self.rhod[k] * (1. + self.qt[k])
             F = self.pm[k] + 0.5*rho_tot_hi*CONST_GRAV*dz + C
 
             # Do iterations
@@ -342,6 +354,7 @@ class InputSounding(object):
                                                               dz, C, # constants
                                                               self.th[k],
                                                               self.qv[k],
+                                                              qt=self.qt[k],
                                                               verbose=verbose)
 
 
