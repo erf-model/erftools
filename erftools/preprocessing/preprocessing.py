@@ -4,10 +4,10 @@ import xarray as xr
 import f90nml
 import cartopy.crs as ccrs
 
-from .wrf.namelist import (TimeControl, Domains, Physics, Dynamics,
+from ..wrf.namelist import (TimeControl, Domains, Physics, Dynamics,
                            BoundaryControl)
-from .wrf.landuse import LandUseTable
-from .inputs import ERFInputFile
+from ..wrf.landuse import LandUseTable
+from ..inputs import ERFInputFile
 
 class WRFInputDeck(object):
     """Class to parse inputs from WRF and convert to inputs for ERF
