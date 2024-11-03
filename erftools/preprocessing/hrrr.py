@@ -45,10 +45,10 @@ class NativeHRRR(object):
 
     def _combine_data(self,varlist,get_surface):
         varstr = '|'.join(varlist)
-        self.ds = self.H.xarray(f':(?:{varstr}):\d+ hybrid') # get all levels
-        if isinstance(self.ds, list):
-            self.ds = xr.merge(self.ds)
-        self.ds.rename_vars({
+        ds = self.H.xarray(f':(?:{varstr}):\d+ hybrid') # get all levels
+        if isinstance(ds, list):
+            ds = xr.merge(ds)
+        ds = ds.rename_vars({
             'u': 'U',
             'v': 'V',
             'clwmr': 'QCLOUD',
@@ -56,10 +56,11 @@ class NativeHRRR(object):
         })
         if get_surface:
             surf = self.H.xarray(':surface:anl')
-            self.ds['LANDMASK'] = surf['lsm']
-            self.ds['SST']      = surf['t']
-            self.ds['HGT']      = surf['orog']
-            self.ds['PSFC']     = surf['sp']
+            ds['LANDMASK'] = surf['lsm']
+            ds['SST']      = surf['t']
+            ds['HGT']      = surf['orog']
+            ds['PSFC']     = surf['sp']
+        self.ds = ds
 
     def _setup_grid(self):
         lat = self.ds.coords['latitude']
@@ -97,6 +98,9 @@ class NativeHRRR(object):
                                               lon.isel(x=0), lat.isel(x=0))
         assert np.allclose(y1[:,0], y1[0,0]) # x values are ~constant
         self.y1 = y1[:,1]
+
+        # create dimension coordinates
+        self.ds = self.ds.assign_coords(x=self.x1, y=self.y1)
 
     def inventory(self):
         return self.H.inventory()
