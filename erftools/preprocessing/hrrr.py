@@ -104,3 +104,41 @@ class NativeHRRR(object):
 
     def inventory(self):
         return self.H.inventory()
+
+    def clip(self,xmin,xmax,ymin,ymax,inplace=False):
+        """Clip the dataset based on x,y ranges in HRRR projected
+        coordinates. If `inplace==False`, return a copy of the clipped
+        dataset.
+        """
+        xlo = self.x1[self.x1 < xmin][-1]
+        xhi = self.x1[self.x1 > xmax][0]
+        ylo = self.y1[self.y1 < ymin][-1]
+        yhi = self.y1[self.y1 > ymax][0]
+        ds = self.ds.sel(x=slice(xlo,xhi), y=slice(ylo,yhi))
+        ds = ds.rename_dims(x='west_east',
+                            y='south_north',
+                            hybrid='bottom_top')
+        if inplace:
+            self.ds = ds
+        else:
+            return ds
+
+    def interpolate_na(self,inplace=False):
+        """Linearly interpolate between hybrid levels to remove any
+        NaNs. If `inplace==False`, return a copy of the interpolated
+        dataset.
+        """
+        if inplace:
+            ds = self.ds
+        else:
+            ds = self.ds.copy()
+        for varn in self.ds.variables:
+            try:
+                nnan = np.count_nonzero(~np.isfinite(ds[varn]))
+            except TypeError:
+                continue
+            if nnan > 0:
+                print(varn,nnan,'NaNs')
+                ds[varn] = ds[varn].interpolate_na('bottom_top')
+        if not inplace:
+            return ds
