@@ -209,12 +209,12 @@ class NativeHRRR(object):
                                getPgivenRTh(rho_d*th_d,qv=qv))
             assert np.allclose(getPgivenRTh(rho_d*th_m),
                                p_tot)
-            e = rho_d*qv * R_v * Tair # vapor pressure
-            assert np.allclose(p_tot, p_dry + e)
+            p_vap = rho_d*qv * R_v * Tair # vapor pressure
+            assert np.allclose(p_tot, p_dry + p_vap)
             eps = R_d / R_v
             assert np.allclose(
                 rho_m,
-                p_t/(R_d*Tair) * (1. - e/p_t*(1-eps)) # from sum of partial densities
+                p_tot/(R_d*Tair) * (1. - p_vap/p_tot*(1-eps)) # from sum of partial densities
             )
 
         if not inplace:
