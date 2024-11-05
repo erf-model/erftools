@@ -6,7 +6,8 @@ import cartopy.crs as ccrs
 
 from ..constants import R_d, R_v, Cp_d, Cp_v, CONST_GRAV, p_0
 from ..EOS import getPgivenRTh, getThgivenRandT, getThgivenPandT
-from .utils import get_w_from_omega
+from .utils import get_hi_faces, get_lo_faces, get_w_from_omega
+from .real import RealInit
 
 
 hrrr_projection = ccrs.LambertConformal(
@@ -143,6 +144,13 @@ class NativeHRRR(object):
         else:
             return ds
 
+    def calculate(self,check=True):
+        """Do all calculations to provide a consistent wrfinput dataset"""
+        self.interpolate_na(inplace=True)
+        self.derive_fields(check,inplace=True)
+        self.calc_real(inplace=True)
+        self.calc_perts(check,inplace=True)
+
     def interpolate_na(self,inplace=False):
         """Linearly interpolate between hybrid levels to remove any
         NaNs. If `inplace==False`, return a copy of the interpolated
@@ -163,10 +171,9 @@ class NativeHRRR(object):
         if not inplace:
             return ds
 
-    def calculate(self,check=True,inplace=False):
-        """Calculate additional field quantities to provide a consistent
-        wrfinput_d01 dataset. If `inplace==False`, return a copy of the
-        updated dataset.
+    def derive_fields(self,check=True,inplace=False):
+        """Calculate additional field quantities. If `inplace==False`,
+        return a copy of the updated dataset.
 
         Calculated quantities include:
         - moist potential temperature (THM)
@@ -175,16 +182,19 @@ class NativeHRRR(object):
         - vertical velocity (W)
         - pressure at top of domain (PTOP)
         """
+        # pull out working vars
+        omega = self.ds['w']
+        p_tot = self.ds['pres']
+        Tair  = self.ds['t']
+        q     = self.ds['q']
+        gh    = self.ds['gh']
+
         if inplace:
+            self.ds = self.ds.drop_vars(['w','pres','t','q','gh'])
             ds = self.ds
         else:
             ds = self.ds.copy()
-
-        # pull out working vars
-        omega = ds['w'];    ds = ds.drop_vars('w')
-        p_tot = ds['pres']; ds = ds.drop_vars('pres')
-        Tair  = ds['t'];    ds = ds.drop_vars('t')
-        q     = ds['q'];    ds = ds.drop_vars('q')
+            ds = ds.drop_vars(['w','pres','t','q','gh'])
 
         # water vapor mixing ratio, from definition of specified humidity
         qv = q / (1-q)
@@ -217,6 +227,13 @@ class NativeHRRR(object):
         ptop = ptop_faces.max()
         ds['P_TOP'] = ptop
 
+        # save for later
+        self.p_dry = p_dry
+        self.p_tot = p_tot
+        self.rho_d = rho_d
+        self.Tair = Tair
+        self.gh = gh
+
         if check:
             assert np.allclose(getPgivenRTh(rho_d*th_m),
                                getPgivenRTh(rho_d*th_d,qv=qv))
@@ -229,6 +246,81 @@ class NativeHRRR(object):
                 rho_m,
                 p_tot/(R_d*Tair) * (1. - p_vap/p_tot*(1-eps)) # from sum of partial densities
             )
+
+        if not inplace:
+            return ds
+
+    def calc_real(self,eta=hrrr_eta,inplace=False):
+        """Calculate additional functions and constants like WRF
+        real.exe. Hybrid coordinate functions `C1`, `C2`, `C3`, and `C4`
+        -- at mass levels/cell centers ("half") and at staggered levels
+        ("full") -- are all column functions that are known a priori and
+        do not vary in time. This will initialize the base state like
+        real.exe as well.
+        """
+        if inplace:
+            ds = self.ds
+        else:
+            ds = self.ds.copy()
+
+        real = RealInit(ds['HGT'], eta_stag=eta, ptop=ds['P_TOP'])
+        self.real = real
+
+        # hybrid coordinate functions
+        ds['C1H'] = real.C1h
+        ds['C2H'] = real.C2h
+        ds['C3H'] = real.C3h
+        ds['C4H'] = real.C4h
+        ds['C1F'] = real.C1f
+        ds['C2F'] = real.C2f
+        ds['C3F'] = real.C3f
+        ds['C4F'] = real.C4f
+
+        # inverse difference in full eta levels
+        ds['RDNW'] = real.rdnw
+
+        if not inplace:
+            return ds
+
+    def calc_perts(self,check=True,inplace=False):
+        """Calculate all perturbational (and remaining base state)
+        quantities.
+        """
+        if inplace:
+            ds = self.ds
+        else:
+            ds = self.ds.copy()
+
+        ds['PB'] = self.real.pb
+        ds['P'] = self.p_tot - ds['PB'] # perturbation
+
+        ds['ALB'] = self.real.alb
+        ds['AL'] = 1.0/self.rho_d - ds['ALB'] # perturbation
+
+        # Set perturbation geopotential such that when destaggered we
+        # recover the original geopotential heights. Note: ph[k=0] = 0
+        ds['PHB'] = self.real.phb
+        ds['PH'] = 0.0 * self.real.phb
+        for k in range(1,self.ds.dims['bottom_top_stag']):
+            ph_lo = ds['PH'].isel(bottom_top_stag=k-1)
+            phb_lo = ds['PHB'].isel(bottom_top_stag=k-1)
+            phb_hi = ds['PHB'].isel(bottom_top_stag=k)
+            gh_avg = self.gh.isel(bottom_top=k-1)
+            # (ph_lo+phb_lo + ph_hi+phb_hi) / (2*g) = gh_avg
+            ph_hi = 2*CONST_GRAV*gh_avg - ph_lo - phb_hi - phb_lo
+            ds['PH'].loc[dict(bottom_top_stag=k)] = ph_hi
+
+        ds['MUB'] = self.real.mub
+        ds['MU'] = xr.where(
+            ds['C3H'] > 0,
+            (self.p_dry - ds['C4H'] - ds['P_TOP']) / ds['C3H'] - ds['MUB'],
+            ds['C4H'] + ds['P_TOP']
+        )
+
+        if check:
+            zf = (ds['PH'] + ds['PHB']) / CONST_GRAV
+            zh = 0.5*(get_hi_faces(zf) + get_lo_faces(zf))
+            assert np.allclose(zh, self.gh)
 
         if not inplace:
             return ds
