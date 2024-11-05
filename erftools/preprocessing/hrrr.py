@@ -8,6 +8,7 @@ from ..constants import R_d, R_v, Cp_d, Cp_v, CONST_GRAV, p_0
 from ..EOS import getPgivenRTh, getThgivenRandT, getThgivenPandT
 from .utils import get_w_from_omega
 
+
 hrrr_projection = ccrs.LambertConformal(
     central_longitude=-97.5,
     central_latitude=38.5,
@@ -42,6 +43,7 @@ varlist = [
     'CLMR', # cloud water mixing ratio [kg/kg]
     'RWMR', # rain water mixing ratio [kg/kg]
 ]
+
 
 class NativeHRRR(object):
     """Get HRRR analysis on native levels and calculate fields
@@ -117,6 +119,9 @@ class NativeHRRR(object):
         # create dimension coordinates
         self.ds = self.ds.assign_coords(x=self.x1, y=self.y1)
 
+    def __getitem__(self,key):
+        return self.ds[key]
+
     def inventory(self):
         return self.H.inventory()
 
@@ -168,6 +173,7 @@ class NativeHRRR(object):
         - dry potential temperature (T)
         - water vapor mixing ratio (QVAPOR)
         - vertical velocity (W)
+        - pressure at top of domain (PTOP)
         """
         if inplace:
             ds = self.ds
@@ -203,6 +209,13 @@ class NativeHRRR(object):
 
         # recover vertical velocity from hydrostatic equation
         ds['W'] = get_w_from_omega(omega, rho_m)
+
+        # extrapolate pressure to top face
+        p1 = p_tot.isel(bottom_top=-2).values
+        p2 = p_tot.isel(bottom_top=-1).values
+        ptop_faces = p2 + 0.5*(p2-p1)
+        ptop = ptop_faces.max()
+        ds['P_TOP'] = ptop
 
         if check:
             assert np.allclose(getPgivenRTh(rho_d*th_m),
