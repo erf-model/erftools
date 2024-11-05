@@ -3,7 +3,8 @@ import xarray as xr
 
 from scipy.optimize import root_scalar
 
-from .constants import R_d, Cp_d, Gamma, CONST_GRAV, p_0
+from ..constants import R_d, Cp_d, Gamma, CONST_GRAV, p_0
+from .utils import get_lo_faces, get_hi_faces
 
 def blending_func(eta, etac=0.2):
     """Relative weighting function to blend between terrain-following sigma
@@ -19,15 +20,6 @@ def blending_func(eta, etac=0.2):
     B4 = - ( 1. - etac**2 )
     B5 = (1.-etac)**4
     return ( B1 + B2*eta + B3*eta**2 + B4*eta**3 ) / B5
-
-
-def get_hi_faces(darr,dim='bottom_top_stag'):
-    assert dim.endswith('_stag')
-    return darr.isel({dim:slice(1,None)}).rename({dim:dim[:-5]})
-
-def get_lo_faces(darr,dim='bottom_top_stag'):
-    assert dim.endswith('_stag')
-    return darr.isel({dim:slice(0,-1)}).rename({dim:dim[:-5]})
 
 
 class RealInit(object):

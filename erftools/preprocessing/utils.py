@@ -9,6 +9,14 @@ def get_stag_dims(ds_cc):
     stag_dims['bottom_top_stag'] += 1
     return stag_dims
 
+def get_lo_faces(da,dim='bottom_top_stag'):
+    assert dim.endswith('_stag')
+    return da.isel({dim:slice(0,-1)}).rename({dim:dim[:-5]})
+
+def get_hi_faces(da,dim='bottom_top_stag'):
+    assert dim.endswith('_stag')
+    return da.isel({dim:slice(1,None)}).rename({dim:dim[:-5]})
+
 def get_w_from_omega(omega_cc, rho_cc, stag_dims=None):
     if stag_dims is None:
         assert isinstance(omega_cc, xr.DataArray)
