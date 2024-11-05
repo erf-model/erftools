@@ -52,17 +52,17 @@ class NativeHRRR(object):
     consistent with WRF
     """
 
-    def __init__(self,datetime,get_surface=False,varlist=varlist):
+    def __init__(self,datetime,varlist=varlist):
         """Download data from native levels, see
         https://www.nco.ncep.noaa.gov/pmb/products/hrrr/
         for data inventory
         """
         self.H = Herbie(datetime, model='hrrr', product='nat')
         self.H.download(verbose=True)
-        self._combine_data(varlist,get_surface)
+        self._combine_data(varlist)
         self._setup_grid()
 
-    def _combine_data(self,varlist,get_surface):
+    def _combine_data(self,varlist):
         varstr = '|'.join(varlist)
         ds = self.H.xarray(f':(?:{varstr}):\d+ hybrid') # get all levels
         if isinstance(ds, list):
@@ -73,12 +73,13 @@ class NativeHRRR(object):
             'clwmr': 'QCLOUD',
             'rwmr' : 'QRAIN',
         })
-        if get_surface:
-            surf = self.H.xarray(':surface:anl')
-            ds['LANDMASK'] = surf['lsm']
-            ds['SST']      = surf['t']
-            ds['HGT']      = surf['orog']
-            ds['PSFC']     = surf['sp']
+
+        surf = self.H.xarray(':surface:anl')
+        ds['LANDMASK'] = surf['lsm']
+        ds['SST']      = surf['t']
+        ds['HGT']      = surf['orog']
+        ds['PSFC']     = surf['sp']
+
         self.ds = ds
 
     def _setup_grid(self):
