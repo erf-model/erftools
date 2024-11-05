@@ -1,8 +1,9 @@
 import numpy as np
 import xarray as xr
+from scipy.interpolate import RegularGridInterpolator
 
-from herbie import Herbie
 import cartopy.crs as ccrs
+from herbie import Herbie
 
 from ..constants import R_d, R_v, Cp_d, Cp_v, CONST_GRAV, p_0
 from ..EOS import getPgivenRTh, getThgivenRandT, getThgivenPandT
@@ -324,3 +325,31 @@ class NativeHRRR(object):
 
         if not inplace:
             return ds
+
+    def interp(self,name,xi,yi,dtype=float):
+        """Linearly interpolate to points xi, yi"""
+        da = self.ds[name].astype(dtype)
+        xdim = [dim for dim in da.dims if dim.startswith('west_east')][0]
+        ydim = [dim for dim in da.dims if dim.startswith('south_north')][0]
+        try:
+            zdim = [dim for dim in da.dims if dim.startswith('bottom_top')][0]
+        except IndexError:
+            zdim = None
+        if zdim:
+            dims = [xdim,ydim,zdim]
+        else:
+            dims = [xdim,ydim]
+
+        print(f'Interpolating from {da.name} with dims {dims}')
+        vals = da.transpose(*dims).values
+        interpfun = RegularGridInterpolator((da.x,da.y),vals)
+        interppts = np.stack([xi.ravel(), yi.ravel()], axis=-1)
+        interpvals = interpfun(interppts)
+
+        shape = list(xi.shape)
+        if zdim:
+             shape.append(da.sizes[zdim])
+        interpvals = interpvals.reshape(shape)
+
+        interpda = xr.DataArray(interpvals, dims=dims)
+        return interpda.transpose(*dims[::-1]) # reverse dims to look like WRF
