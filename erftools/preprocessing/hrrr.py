@@ -354,3 +354,70 @@ class NativeHRRR(object):
 
         interpda = xr.DataArray(interpvals, dims=dims)
         return interpda.transpose(*dims[::-1]) # reverse dims to look like WRF
+
+    def to_wrfinput(self,
+                    start_date,
+                    grid,
+                    hrrr_xg, hrrr_yg,
+                    hrrr_xg_u, hrrr_yg_u,
+                    hrrr_xg_v, hrrr_yg_v,
+                    dtype=float):
+        """Create a new Dataset with HRRR fields interpolated to the
+        input grid points
+        """
+        lat  , lon   = grid.calc_lat_lon()
+        lat_u, lon_u = grid.calc_lat_lon('U')
+        lat_v, lon_v = grid.calc_lat_lon('V')
+
+        msf   = grid.calc_msf(lat)
+        msf_u = grid.calc_msf(lat_u)
+        msf_v = grid.calc_msf(lat_v)
+
+        # create dataset with coordinates
+        inp = xr.Dataset(
+            coords={'XLAT' :(('south_north','west_east'),lat.astype(dtype)),
+                    'XLONG':(('south_north','west_east'),lon.astype(dtype)),
+                    'XLAT_U' :(('south_north','west_east_stag'),lat_u.astype(dtype)),
+                    'XLONG_U':(('south_north','west_east_stag'),lon_u.astype(dtype)),
+                    'XLAT_V' :(('south_north_stag','west_east'),lat_v.astype(dtype)),
+                    'XLONG_V':(('south_north_stag','west_east'),lon_v.astype(dtype))}
+        )
+        inp['Times'] = bytes(start_date.strftime('%Y-%m-%d_%H:%M:%S'),'utf-8')
+
+        # interpolate staggered velocity fields
+        Ugrid = self.interp('U', hrrr_xg_u, hrrr_yg_u, dtype=dtype)
+        Vgrid = self.interp('V', hrrr_xg_v, hrrr_yg_v, dtype=dtype)
+        inp['U'] = Ugrid.rename(west_east='west_east_stag')
+        inp['V'] = Vgrid.rename(south_north='south_north_stag')
+
+        # interpolate fields that aren't staggered in x,y
+        unstag_interp_vars = [
+            'W',
+            'ALB',
+            'AL',
+            'T',
+            'PH',
+            'PHB',
+            'PB',
+            'P',
+            'SST',
+            'LANDMASK',
+            'MUB',
+            'QVAPOR',
+            'QCLOUD',
+            'QRAIN',
+        ]
+        for varn in unstag_interp_vars:
+            inp[varn] = self.interp(varn, hrrr_xg, hrrr_yg, dtype=dtype)
+
+        # these are already on the output grid
+        inp['MAPFAC_U'] = (('south_north', 'west_east_stag'), msf_u.astype(dtype))
+        inp['MAPFAC_V'] = (('south_north_stag', 'west_east'), msf_v.astype(dtype))
+        inp['MAPFAC_M'] = (('south_north', 'west_east'), msf.astype(dtype))
+
+        # these only vary with height, no horizontal interp needed
+        inp['C1H'] = self.ds['C1H'].astype(dtype)
+        inp['C2H'] = self.ds['C2H'].astype(dtype)
+        inp['RDNW'] = self.ds['RDNW'].astype(dtype)
+
+        return inp
