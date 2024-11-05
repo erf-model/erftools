@@ -4,6 +4,9 @@ import xarray as xr
 from herbie import Herbie
 import cartopy.crs as ccrs
 
+from ..constants import R_d, R_v, Cp_d, Cp_v, CONST_GRAV, p_0
+from ..EOS import getPgivenRTh, getThgivenRandT, getThgivenPandT
+from .utils import get_w_from_omega
 
 hrrr_projection = ccrs.LambertConformal(
     central_longitude=-97.5,
@@ -140,5 +143,67 @@ class NativeHRRR(object):
             if nnan > 0:
                 print(varn,nnan,'NaNs')
                 ds[varn] = ds[varn].interpolate_na('bottom_top')
+        if not inplace:
+            return ds
+
+    def calculate(self,check=True,inplace=False):
+        """Calculate additional field quantities to provide a consistent
+        wrfinput_d01 dataset. If `inplace==False`, return a copy of the
+        updated dataset.
+
+        Calculated quantities include:
+        - moist potential temperature (THM)
+        - dry potential temperature (T)
+        - water vapor mixing ratio (QVAPOR)
+        - vertical velocity (W)
+        """
+        if inplace:
+            ds = self.ds
+        else:
+            ds = self.ds.copy()
+
+        # pull out working vars
+        omega = ds['w'];    ds = ds.drop_vars('w')
+        p_tot = ds['pres']; ds = ds.drop_vars('pres')
+        Tair  = ds['t'];    ds = ds.drop_vars('t')
+        q     = ds['q'];    ds = ds.drop_vars('q')
+
+        # water vapor mixing ratio, from definition of specified humidity
+        qv = q / (1-q)
+        ds['QVAPOR'] = qv
+
+        # partial density of dry air (moisture reduces rho_d)
+        rho_d = p_tot / (R_d * Tair) / (1 + R_v/R_d*qv)
+        rho_m = rho_d * (1 + qv)
+
+        # partial pressure of dry air
+        p_dry = rho_d * R_d * Tair
+
+        # perturbation _dry_ potential temperature [K]
+        th_d = Tair * (p_0/p_tot)**(R_d/Cp_d)
+        th_m = th_d * (1 + R_v/R_d*qv)
+        ds['T'] = th_d - 300.0
+        ds['THM'] = th_m - 300.0
+
+        # total density of a parcel of air
+        qt = ds['QVAPOR'] + ds['QCLOUD'] + ds['QRAIN']
+        rho_t = rho_d * (1 + qt)
+
+        # recover vertical velocity from hydrostatic equation
+        ds['W'] = get_w_from_omega(omega, rho_m)
+
+        if check:
+            assert np.allclose(getPgivenRTh(rho_d*th_m),
+                               getPgivenRTh(rho_d*th_d,qv=qv))
+            assert np.allclose(getPgivenRTh(rho_d*th_m),
+                               p_tot)
+            e = rho_d*qv * R_v * Tair # vapor pressure
+            assert np.allclose(p_tot, p_dry + e)
+            eps = R_d / R_v
+            assert np.allclose(
+                rho_m,
+                p_t/(R_d*Tair) * (1. - e/p_t*(1-eps)) # from sum of partial densities
+            )
+
         if not inplace:
             return ds
