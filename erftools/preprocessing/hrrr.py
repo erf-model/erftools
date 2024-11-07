@@ -52,11 +52,13 @@ class NativeHRRR(object):
     consistent with WRF
     """
 
-    def __init__(self,datetime,varlist=gribvars):
+    def __init__(self,datetime,varlist=gribvars,verbose=False):
         """Download data from native levels, see
         https://www.nco.ncep.noaa.gov/pmb/products/hrrr/
         for data inventory
         """
+        self.datetime = datetime
+        self.verbose = verbose
         self.H = Herbie(datetime, model='hrrr', product='nat')
         self.H.download(verbose=True)
         self._combine_data(varlist)
@@ -168,7 +170,8 @@ class NativeHRRR(object):
             except TypeError:
                 continue
             if nnan > 0:
-                print(varn,nnan,'NaNs')
+                if verbose:
+                    print(varn,nnan,'NaNs')
                 ds[varn] = ds[varn].interpolate_na('bottom_top')
         if not inplace:
             return ds
@@ -339,7 +342,8 @@ class NativeHRRR(object):
         else:
             dims = [xdim,ydim]
 
-        print(f'Interpolating from {da.name} with dims {dims}')
+        if verbose:
+            print(f'Interpolating from {da.name} with dims {dims}')
         vals = da.transpose(*dims).values
         interpfun = RegularGridInterpolator((da.x,da.y),vals)
         interppts = np.stack([xi.ravel(), yi.ravel()], axis=-1)
@@ -354,7 +358,6 @@ class NativeHRRR(object):
         return interpda.transpose(*dims[::-1]) # reverse dims to look like WRF
 
     def to_wrfinput(self,
-                    start_date,
                     grid,
                     hrrr_xg, hrrr_yg,
                     hrrr_xg_u, hrrr_yg_u,
@@ -380,7 +383,7 @@ class NativeHRRR(object):
                     'XLAT_V' :(('south_north_stag','west_east'),lat_v.astype(dtype)),
                     'XLONG_V':(('south_north_stag','west_east'),lon_v.astype(dtype))}
         )
-        inp['Times'] = bytes(start_date.strftime('%Y-%m-%d_%H:%M:%S'),'utf-8')
+        inp['Times'] = bytes(self.datetime.strftime('%Y-%m-%d_%H:%M:%S'),'utf-8')
 
         # interpolate staggered velocity fields
         Ugrid = self.interp('U', hrrr_xg_u, hrrr_yg_u, dtype=dtype)
@@ -421,12 +424,12 @@ class NativeHRRR(object):
         return inp
 
     def to_wrfbdy(self,
-                  datetime,
                   grid, bdy_width,
                   hrrr_xg, hrrr_yg,
                   hrrr_xg_u, hrrr_yg_u,
                   hrrr_xg_v, hrrr_yg_v,
-                  dtype=float):
+                  dtype=float,
+                  verbose=False):
         """Create a new Dataset with HRRR fields interpolated to the
         input grid points on the specified boundary
 
@@ -504,17 +507,18 @@ class NativeHRRR(object):
                 # this dimension may or may not be staggered
                 bw_dim = [dim for dim in ds[varn].dims
                           if dim.startswith(width_dim[bname])][0]
-                print(f'Coupling {varn} on {bname} (bdy_width dim: {bw_dim})')
+                if verbose:
+                    print(f'Coupling {varn} on {bname} (bdy_width dim: {bw_dim})')
                 for w in range(bdy_width):
                     coupled = get_mass_weighted(varn, ds, **{bw_dim:w})
-                    #print(varn,w,coupled)
                     ds[varn].loc[dict({bw_dim:w})] = coupled
 
             bdy[bname] = ds
 
         # create combined dataset
         ds = xr.Dataset({
-            'Times': ('Time', [bytes(datetime.strftime('%Y-%m-%d_%H:%M:%S'),'utf-8')])
+            'Times': ('Time',
+                      [bytes(self.datetime.strftime('%Y-%m-%d_%H:%M:%S'),'utf-8')])
         })
         output_vars = ['U','V','W','PH','T','MU','QVAPOR','QCLOUD','QRAIN']
         for varn in output_vars:
