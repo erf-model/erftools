@@ -62,9 +62,12 @@ class NativeHRRR(object):
         self.H = Herbie(datetime, model='hrrr', product='nat')
         self.H.download(verbose=True)
         self._combine_data(varlist)
-        self._setup_grid()
+        self._setup_hrrr_grid()
 
     def _combine_data(self,varlist):
+        """Combine data from hybrid levels with surface data; rename
+        like WRF
+        """
         varstr = '|'.join(varlist)
         ds = self.H.xarray(f':(?:{varstr}):\d+ hybrid') # get all levels
         if isinstance(ds, list):
@@ -84,7 +87,7 @@ class NativeHRRR(object):
 
         self.ds = ds
 
-    def _setup_grid(self):
+    def _setup_hrrr_grid(self):
         lat = self.ds.coords['latitude']
         lon = self.ds.coords['longitude']
         self.xlim = {}
@@ -123,6 +126,14 @@ class NativeHRRR(object):
 
         # create dimension coordinates
         self.ds = self.ds.assign_coords(x=self.x1, y=self.y1)
+
+        # initialize output grids
+        self.xg = None
+        self.yg = None
+        self.xg_u = None
+        self.yg_u = None
+        self.xg_v = None
+        self.yg_v = None
 
     def __getitem__(self,key):
         return self.ds[key]
@@ -170,7 +181,7 @@ class NativeHRRR(object):
             except TypeError:
                 continue
             if nnan > 0:
-                if verbose:
+                if self.verbose:
                     print(varn,nnan,'NaNs')
                 ds[varn] = ds[varn].interpolate_na('bottom_top')
         if not inplace:
@@ -342,7 +353,7 @@ class NativeHRRR(object):
         else:
             dims = [xdim,ydim]
 
-        if verbose:
+        if self.verbose:
             print(f'Interpolating from {da.name} with dims {dims}')
         vals = da.transpose(*dims).values
         interpfun = RegularGridInterpolator((da.x,da.y),vals)
@@ -357,22 +368,40 @@ class NativeHRRR(object):
         interpda = xr.DataArray(interpvals, dims=dims)
         return interpda.transpose(*dims[::-1]) # reverse dims to look like WRF
 
-    def to_wrfinput(self,
-                    grid,
-                    hrrr_xg, hrrr_yg,
-                    hrrr_xg_u, hrrr_yg_u,
-                    hrrr_xg_v, hrrr_yg_v,
-                    dtype=float):
+    def set_output_grid(self,grid):
+        """Calculate the output surface grid points in the HRRR
+        projection
+        """
+        self.grid = grid
+
+        xg,   yg   = np.meshgrid(grid.x_destag, grid.y_destag, indexing='ij')
+        xg_u, yg_u = np.meshgrid(grid.x       , grid.y_destag, indexing='ij')
+        xg_v, yg_v = np.meshgrid(grid.x_destag, grid.y       , indexing='ij')
+
+        pts = hrrr_projection.transform_points(grid.proj, xg, yg)
+        self.xg  = pts[:,:,0]
+        self.yg  = pts[:,:,1]
+
+        pts_u = hrrr_projection.transform_points(grid.proj, xg_u, yg_u)
+        self.xg_u  = pts_u[:,:,0]
+        self.yg_u  = pts_u[:,:,1]
+
+        pts_v = hrrr_projection.transform_points(grid.proj, xg_v, yg_v)
+        self.xg_v  = pts_v[:,:,0]
+        self.yg_v  = pts_v[:,:,1]
+
+
+    def to_wrfinput(self,dtype=float):
         """Create a new Dataset with HRRR fields interpolated to the
         input grid points
         """
-        lat  , lon   = grid.calc_lat_lon()
-        lat_u, lon_u = grid.calc_lat_lon('U')
-        lat_v, lon_v = grid.calc_lat_lon('V')
+        lat  , lon   = self.grid.calc_lat_lon()
+        lat_u, lon_u = self.grid.calc_lat_lon('U')
+        lat_v, lon_v = self.grid.calc_lat_lon('V')
 
-        msf   = grid.calc_msf(lat)
-        msf_u = grid.calc_msf(lat_u)
-        msf_v = grid.calc_msf(lat_v)
+        msf   = self.grid.calc_msf(lat)
+        msf_u = self.grid.calc_msf(lat_u)
+        msf_v = self.grid.calc_msf(lat_v)
 
         # create dataset with coordinates
         inp = xr.Dataset(
@@ -386,8 +415,8 @@ class NativeHRRR(object):
         inp['Times'] = bytes(self.datetime.strftime('%Y-%m-%d_%H:%M:%S'),'utf-8')
 
         # interpolate staggered velocity fields
-        Ugrid = self.interp('U', hrrr_xg_u, hrrr_yg_u, dtype=dtype)
-        Vgrid = self.interp('V', hrrr_xg_v, hrrr_yg_v, dtype=dtype)
+        Ugrid = self.interp('U', self.xg_u, self.yg_u, dtype=dtype)
+        Vgrid = self.interp('V', self.xg_v, self.yg_v, dtype=dtype)
         inp['U'] = Ugrid.rename(west_east='west_east_stag')
         inp['V'] = Vgrid.rename(south_north='south_north_stag')
 
@@ -409,7 +438,7 @@ class NativeHRRR(object):
             'QRAIN',
         ]
         for varn in unstag_interp_vars:
-            inp[varn] = self.interp(varn, hrrr_xg, hrrr_yg, dtype=dtype)
+            inp[varn] = self.interp(varn, self.xg, self.yg, dtype=dtype)
 
         # these are already on the output grid
         inp['MAPFAC_U'] = (('south_north', 'west_east_stag'), msf_u.astype(dtype))
@@ -423,13 +452,7 @@ class NativeHRRR(object):
 
         return inp
 
-    def to_wrfbdy(self,
-                  grid, bdy_width,
-                  hrrr_xg, hrrr_yg,
-                  hrrr_xg_u, hrrr_yg_u,
-                  hrrr_xg_v, hrrr_yg_v,
-                  dtype=float,
-                  verbose=False):
+    def to_wrfbdy(self,bdy_width,dtype=float):
         """Create a new Dataset with HRRR fields interpolated to the
         input grid points on the specified boundary
 
@@ -454,9 +477,8 @@ class NativeHRRR(object):
             'BYE': 'south_north',
         }
 
-        lat  , lon   = grid.calc_lat_lon()
-        lat_u, lon_u = grid.calc_lat_lon('U')
-        lat_v, lon_v = grid.calc_lat_lon('V')
+        lat_u, _ = self.grid.calc_lat_lon('U')
+        lat_v, _ = self.grid.calc_lat_lon('V')
 
         # create data subsets for each boundary
         bdy = {}
@@ -464,8 +486,8 @@ class NativeHRRR(object):
             ds = xr.Dataset()
 
             # interpolate staggered velocity fields
-            Ugrid = self.interp('U', hrrr_xg_u[*idxs], hrrr_yg_u[*idxs], dtype=dtype)
-            Vgrid = self.interp('V', hrrr_xg_v[*idxs], hrrr_yg_v[*idxs], dtype=dtype)
+            Ugrid = self.interp('U', self.xg_u[*idxs], self.yg_u[*idxs], dtype=dtype)
+            Vgrid = self.interp('V', self.xg_v[*idxs], self.yg_v[*idxs], dtype=dtype)
             ds['U'] = Ugrid.rename(west_east='west_east_stag')
             ds['V'] = Vgrid.rename(south_north='south_north_stag')
 
@@ -482,12 +504,12 @@ class NativeHRRR(object):
                 'QRAIN',
             ]
             for varn in unstag_interp_vars:
-                ds[varn] = self.interp(varn, hrrr_xg[*idxs], hrrr_yg[*idxs], dtype=dtype)
+                ds[varn] = self.interp(varn, self.xg[*idxs], self.yg[*idxs], dtype=dtype)
 
             # setup map scale factors
             sn_ew_idxs = idxs[::-1]
-            msf_u = grid.calc_msf(lat_u[*sn_ew_idxs])
-            msf_v = grid.calc_msf(lat_v[*sn_ew_idxs])
+            msf_u = self.grid.calc_msf(lat_u[*sn_ew_idxs])
+            msf_v = self.grid.calc_msf(lat_v[*sn_ew_idxs])
             ds['MAPFAC_U'] = (('south_north', 'west_east_stag'), msf_u.astype(dtype))
             ds['MAPFAC_V'] = (('south_north_stag', 'west_east'), msf_v.astype(dtype))
 
@@ -507,7 +529,7 @@ class NativeHRRR(object):
                 # this dimension may or may not be staggered
                 bw_dim = [dim for dim in ds[varn].dims
                           if dim.startswith(width_dim[bname])][0]
-                if verbose:
+                if self.verbose:
                     print(f'Coupling {varn} on {bname} (bdy_width dim: {bw_dim})')
                 for w in range(bdy_width):
                     coupled = get_mass_weighted(varn, ds, **{bw_dim:w})
