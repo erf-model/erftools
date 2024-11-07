@@ -272,17 +272,38 @@ class LambertConformalGrid(object):
         self.y_destag = (np.arange(self.ny)+0.5)*self.dy + ylo
 
     def calc_lat_lon(self,stagger=None):
+        if stagger is None and hasattr(self,'lat'):
+            return self.lat, self.lon
+        elif stagger=='U' and hasattr(self,'lat_u'):
+            return self.lat_u, self.lon_u
+        elif stagger=='V' and hasattr(self,'lat_v'):
+            return self.lat_v, self.lon_v
+
         if not hasattr(self,'x'):
             self.setup_grid()
+
         if stagger=='U':
+            print('Calculating lat-lon staggered in x')
             xx,yy = np.meshgrid(self.x, self.y_destag)
         elif stagger=='V':
+            print('Calculating lat-lon staggered in y')
             xx,yy = np.meshgrid(self.x_destag, self.y)
         else:
+            print('Calculating unstaggered lat-lon')
             xx,yy = np.meshgrid(self.x_destag, self.y_destag)
         lonlat = ccrs.Geodetic().transform_points(self.proj, xx.ravel(), yy.ravel())
         lon = lonlat[:,0].reshape(xx.shape)
         lat = lonlat[:,1].reshape(xx.shape)
+
+        if stagger is None:
+            self.lat = lat
+            self.lon = lon
+        elif stagger =='U':
+            self.lat_u = lat
+            self.lon_u = lon
+        elif stagger =='V':
+            self.lat_v = lat
+            self.lon_v = lon
         return lat,lon
 
     def calc_msf(self,lat):
