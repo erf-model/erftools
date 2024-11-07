@@ -34,7 +34,7 @@ hrrr_eta = np.array([1.0000, 0.9980, 0.9940, 0.9870, 0.9750, 0.9590, 0.9390,
 hrrr_eta = xr.DataArray(hrrr_eta, dims='bottom_top_stag', name='eta')
 
 # GRIB2 variable names
-varlist = [
+gribvars = [
     'HGT',  # geopotential height [m]
     'UGRD', # U-component of wind [m/s]
     'VGRD', # V-component of wind [m/s]
@@ -52,7 +52,7 @@ class NativeHRRR(object):
     consistent with WRF
     """
 
-    def __init__(self,datetime,varlist=varlist):
+    def __init__(self,datetime,varlist=gribvars):
         """Download data from native levels, see
         https://www.nco.ncep.noaa.gov/pmb/products/hrrr/
         for data inventory
@@ -313,11 +313,9 @@ class NativeHRRR(object):
             ds['PH'].loc[dict(bottom_top_stag=k)] = ph_hi
 
         ds['MUB'] = self.real.mub
-        ds['MU'] = xr.where(
-            ds['C3H'] > 0,
-            (self.p_dry - ds['C4H'] - ds['P_TOP']) / ds['C3H'] - ds['MUB'],
-            ds['C4H'] + ds['P_TOP']
-        )
+        ds['MU'] = (self.p_dry.isel(bottom_top=0)
+                    - ds['C4F'].isel(bottom_top_stag=0)
+                    - ds['P_TOP']) / ds['C3F'].isel(bottom_top_stag=0) - ds['MUB']
 
         if check:
             zf = (ds['PH'] + ds['PHB']) / CONST_GRAV
@@ -421,3 +419,213 @@ class NativeHRRR(object):
         inp['RDNW'] = self.ds['RDNW'].astype(dtype)
 
         return inp
+
+    def to_wrfbdy(self,
+                  datetime,
+                  grid, bdy_width,
+                  hrrr_xg, hrrr_yg,
+                  hrrr_xg_u, hrrr_yg_u,
+                  hrrr_xg_v, hrrr_yg_v,
+                  dtype=float):
+        """Create a new Dataset with HRRR fields interpolated to the
+        input grid points on the specified boundary
+
+        This is a stripped down version of to_wrfinput but with mass-
+        weighting for the field variables
+        """
+        ib = {
+            'lo': slice(0,bdy_width),
+            'hi': slice(-bdy_width,None),
+        }
+        bndry = {
+            # dims: west_east*, south_north*
+            'BXS': (ib['lo'], slice(None)),
+            'BXE': (ib['hi'], slice(None)),
+            'BYS': (slice(None), ib['lo']),
+            'BYE': (slice(None), ib['hi']),
+        }
+        width_dim = {
+            'BXS': 'west_east',
+            'BXE': 'west_east',
+            'BYS': 'south_north',
+            'BYE': 'south_north',
+        }
+
+        lat  , lon   = grid.calc_lat_lon()
+        lat_u, lon_u = grid.calc_lat_lon('U')
+        lat_v, lon_v = grid.calc_lat_lon('V')
+
+        # create data subsets for each boundary
+        bdy = {}
+        for bname,idxs in bndry.items():
+            ds = xr.Dataset()
+
+            # interpolate staggered velocity fields
+            Ugrid = self.interp('U', hrrr_xg_u[*idxs], hrrr_yg_u[*idxs], dtype=dtype)
+            Vgrid = self.interp('V', hrrr_xg_v[*idxs], hrrr_yg_v[*idxs], dtype=dtype)
+            ds['U'] = Ugrid.rename(west_east='west_east_stag')
+            ds['V'] = Vgrid.rename(south_north='south_north_stag')
+
+            # interpolate fields (a subset of wrfinput) that aren't staggered
+            # in x,y
+            unstag_interp_vars = [
+                'W',
+                'PH',
+                'T',
+                'MU',
+                'MUB', # needed to couple the other quantities
+                'QVAPOR',
+                'QCLOUD',
+                'QRAIN',
+            ]
+            for varn in unstag_interp_vars:
+                ds[varn] = self.interp(varn, hrrr_xg[*idxs], hrrr_yg[*idxs], dtype=dtype)
+
+            # setup map scale factors
+            sn_ew_idxs = idxs[::-1]
+            msf_u = grid.calc_msf(lat_u[*sn_ew_idxs])
+            msf_v = grid.calc_msf(lat_v[*sn_ew_idxs])
+            ds['MAPFAC_U'] = (('south_north', 'west_east_stag'), msf_u.astype(dtype))
+            ds['MAPFAC_V'] = (('south_north_stag', 'west_east'), msf_v.astype(dtype))
+
+            # these column functions are needed to couple all quantities (except MU)
+            ds['C1H'] = self.ds['C1H'].astype(dtype)
+            ds['C2H'] = self.ds['C2H'].astype(dtype)
+            ds['C1F'] = self.ds['C1F'].astype(dtype)
+            ds['C2F'] = self.ds['C2F'].astype(dtype)
+
+            # calculate coupled fields
+            vars_to_couple = [varn for varn in ds.data_vars
+                              if not varn.startswith('MU') and
+                                 not varn.startswith('MAPFAC') and
+                                 not varn.startswith('C1') and
+                                 not varn.startswith('C2')]
+            for varn in vars_to_couple:
+                # this dimension may or may not be staggered
+                bw_dim = [dim for dim in ds[varn].dims
+                          if dim.startswith(width_dim[bname])][0]
+                print(f'Coupling {varn} on {bname} (bdy_width dim: {bw_dim})')
+                for w in range(bdy_width):
+                    coupled = get_mass_weighted(varn, ds, **{bw_dim:w})
+                    #print(varn,w,coupled)
+                    ds[varn].loc[dict({bw_dim:w})] = coupled
+
+            bdy[bname] = ds
+
+        # create combined dataset
+        ds = xr.Dataset({
+            'Times': ('Time', [bytes(datetime.strftime('%Y-%m-%d_%H:%M:%S'),'utf-8')])
+        })
+        output_vars = ['U','V','W','PH','T','MU','QVAPOR','QCLOUD','QRAIN']
+        for varn in output_vars:
+            for bname,idxs in bndry.items():
+                # get all the buffer region planes
+                if varn=='MU':
+                    lat_dim = we_dim if width_dim[bname]==sn_dim else sn_dim
+                    mu = bdy[bname]['MU'].isel({'west_east': idxs[0],
+                                                'south_north': idxs[1]})
+                    mu = mu.rename({width_dim[bname]:'bdy_width'})
+                    mu = mu.transpose('bdy_width',lat_dim)
+                    ds[f'MU_{bname}'] = mu.expand_dims('Time',axis=0)
+                else:
+                    # these dimensions may or may not be staggered
+                    we_dim = [dim for dim in bdy[bname][varn].dims
+                              if dim.startswith('west_east')][0]
+                    sn_dim = [dim for dim in bdy[bname][varn].dims
+                              if dim.startswith('south_north')][0]
+                    bt_dim = [dim for dim in bdy[bname][varn].dims
+                              if dim.startswith('bottom_top')][0]
+                    bw_dim = [dim for dim in bdy[bname][varn].dims
+                              if dim.startswith(width_dim[bname])][0]
+                    lat_dim = we_dim if bw_dim==sn_dim else sn_dim
+                    fld = bdy[bname][varn].isel({we_dim: idxs[0],
+                                                 sn_dim: idxs[1]})
+                    fld = fld.rename({bw_dim:'bdy_width'})
+                    fld = fld.transpose('bdy_width',bt_dim,lat_dim)
+                    ds[f'{varn}_{bname}'] = fld.expand_dims('Time',axis=0)
+        return ds
+
+
+def get_mass_weighted(varname,ds,**dims):
+    """Calculate the coupled or "mass weighted" field quantities
+
+    `dims` should be a single key=value pair used to select a boundary
+    plane. Planes on the high end should be selected with negative
+    indices.
+
+    Notes:
+    - The mass-weighted U and V are located at their respective
+      staggered locations
+    - The cell-centered column mass MU+MUB is staggered by averaging
+      interior values to faces and extrapolating values to boundary
+      faces
+
+    See https://forum.mmm.ucar.edu/threads/definitions-of-_btxe-and-_bxe-in-wrfbdy-output.187/#post-23322
+    E.g., the boundary values (the BXE, BYE, BXS, BYS arrays) for
+    the moist fields would be
+        qv(i,k,j)*C1(k) * ( mub(i,j) + mu(i,j) ) + C2(k).
+    """
+    assert len(dims.keys()) == 1, 'Can only specify one boundary coordinate at a time'
+
+    da = ds[varname].isel(**dims)
+
+    # get unstag_dim, idx, bdy_width
+    for dim,idx in dims.items():
+        if dim.endswith('_stag'):
+            unstag_dim = dim[:-5]
+        else:
+            unstag_dim = dim
+    low_end = (idx >= 0)
+    bdy_width = idx if low_end else -idx-1
+
+    mut = (ds['MUB']+ds['MU']).isel({unstag_dim:idx})
+    if varname == 'U':
+        # stagger in west-east direction
+        if dim == 'west_east_stag' and bdy_width > 0:
+            idx1 = bdy_width - 1
+            if not low_end:
+                idx1 = -idx1 - 1
+            mut1 = (ds['MUB']+ds['MU']).isel({unstag_dim:idx1})
+            mut = 0.5 * (mut + mut1)
+        elif dim == 'south_north':
+            mut = xr.concat([mut,mut.isel(west_east=-1)],'west_east')
+            mut = mut.rename(west_east='west_east_stag')
+            mut.loc[dict(west_east_stag=slice(1,-1))] = \
+                    0.5 * (mut.isel(west_east_stag=slice(1,-1)) +
+                           mut.isel(west_east_stag=slice(0,-2)))
+    elif varname == 'V':
+        # stagger in south-north direction
+        if dim == 'south_north_stag' and bdy_width > 0:
+            idx1 = bdy_width - 1
+            if not low_end:
+                idx1 = -idx1 - 1
+            mut1 = (ds['MUB']+ds['MU']).isel({unstag_dim:idx1})
+            mut = 0.5 * (mut + mut1)
+        elif dim == 'west_east':
+            mut = xr.concat([mut,mut.isel(south_north=-1)],'south_north')
+            mut = mut.rename(south_north='south_north_stag')
+            mut.loc[dict(south_north_stag=slice(1,-1))] = \
+                    0.5 * (mut.isel(south_north_stag=slice(1,-1)) +
+                           mut.isel(south_north_stag=slice(0,-2)))
+
+    if 'bottom_top' in da.dims:
+        C1 = ds['C1H']
+        C2 = ds['C2H']
+    elif 'bottom_top_stag' in da.dims:
+        C1 = ds['C1F']
+        C2 = ds['C2F']
+    else:
+        print('wtf')
+
+    # da    = f(z, x_or_y)
+    # mut   = f(x_or_y)
+    # C1,C2 = f(z)
+    coupled = da * (C1*mut + C2)
+
+    # couple momenta to inverse map factors
+    if varname == 'U':
+        coupled /= ds['MAPFAC_U'].isel(**dims)
+    elif varname == 'V':
+        coupled /= ds['MAPFAC_V'].isel(**dims)
+
+    return coupled
