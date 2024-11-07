@@ -159,8 +159,26 @@ class NativeHRRR(object):
         else:
             return ds
 
-    def calculate(self,check=True):
-        """Do all calculations to provide a consistent wrfinput dataset"""
+    def _compare_arrays(self,arr1,arr2,checktype):
+        if isinstance(arr1, xr.DataArray):
+            arr1 = arr1.values
+        if isinstance(arr2, xr.DataArray):
+            arr2 = arr2.values
+        if checktype == 'assert':
+            assert np.allclose(arr1, arr2)
+        elif checktype == 'warn':
+            if not np.allclose(arr1, arr2):
+                abserr = np.abs(arr2 - arr1)
+                relerr = np.abs((arr2 - arr1) / arr1)
+                print(f'\x1b[31mWARNING: abserr={np.max(abserr):g} relerr={np.max(relerr)}\x1b[0m')
+        else:
+            print('Skipping check, unknown type=',checktype)
+
+    def calculate(self,check='assert'):
+        """Do all calculations to provide a consistent wrf-like dataset
+
+        `check` can be "warn" or "assert"
+        """
         self.interpolate_na(inplace=True)
         self.derive_fields(check,inplace=True)
         self.calc_real(inplace=True)
@@ -187,7 +205,7 @@ class NativeHRRR(object):
         if not inplace:
             return ds
 
-    def derive_fields(self,check=True,inplace=False):
+    def derive_fields(self,check='assert',inplace=False):
         """Calculate additional field quantities. If `inplace==False`,
         return a copy of the updated dataset.
 
@@ -251,17 +269,19 @@ class NativeHRRR(object):
         self.gh = gh
 
         if check:
-            assert np.allclose(getPgivenRTh(rho_d*th_m),
-                               getPgivenRTh(rho_d*th_d,qv=qv))
-            assert np.allclose(getPgivenRTh(rho_d*th_m),
-                               p_tot)
+            self._compare_arrays(getPgivenRTh(rho_d*th_m),
+                                 getPgivenRTh(rho_d*th_d,qv=qv),
+                                 check)
+            self._compare_arrays(getPgivenRTh(rho_d*th_m), p_tot, check)
+
             p_vap = rho_d*qv * R_v * Tair # vapor pressure
-            assert np.allclose(p_tot, p_dry + p_vap)
+            self._compare_arrays(p_tot, p_dry + p_vap, check)
+
             eps = R_d / R_v
-            assert np.allclose(
+            self._compare_arrays(
                 rho_m,
-                p_tot/(R_d*Tair) * (1. - p_vap/p_tot*(1-eps)) # from sum of partial densities
-            )
+                p_tot/(R_d*Tair) * (1. - p_vap/p_tot*(1-eps)), # from sum of partial densities
+                check)
 
         if not inplace:
             return ds
@@ -298,7 +318,7 @@ class NativeHRRR(object):
         if not inplace:
             return ds
 
-    def calc_perts(self,check=True,inplace=False):
+    def calc_perts(self,check='assert',inplace=False):
         """Calculate all perturbational (and remaining base state)
         quantities.
         """
@@ -334,7 +354,7 @@ class NativeHRRR(object):
         if check:
             zf = (ds['PH'] + ds['PHB']) / CONST_GRAV
             zh = 0.5*(get_hi_faces(zf) + get_lo_faces(zf))
-            assert np.allclose(zh, self.gh)
+            self._compare_arrays(zh, self.gh, check)
 
         if not inplace:
             return ds
