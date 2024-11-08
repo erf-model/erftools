@@ -45,6 +45,12 @@ gribvars = [
     'CLMR', # cloud water mixing ratio [kg/kg]
     'RWMR', # rain water mixing ratio [kg/kg]
 ]
+surfgribvars = [
+    'LAND',
+    'HGT',
+    'TMP',
+    'PRES'
+]
 
 
 class NativeHRRR(object):
@@ -73,11 +79,11 @@ class NativeHRRR(object):
         #ds = self.H.xarray(f':(?:{varstr}):\d+ hybrid') # get all levels
         #if isinstance(ds, list):
         #    ds = xr.merge(ds)
+        print('Retrieving hybrid-level variables:',end='')
         dslist = []
-        print('Retrieving',end='')
         for varn in gribvars:
             print(f' {varn}',end='',flush=True)
-            dslist.append(self.H.xarray(f':(?:{varn}):\d+ hybrid'))
+            dslist.append(self.H.xarray(f':{varn}:\d+ hybrid'))
         print('')
         ds = xr.merge(dslist)
         ds = ds.rename_vars({
@@ -87,12 +93,20 @@ class NativeHRRR(object):
             'rwmr' : 'QRAIN',
         })
 
-        surf = self.H.xarray(':surface:anl')
+        print('Retrieving surface variables:',end='')
+        dslist = []
+        for varn in surfgribvars:
+            print(f' {varn}',end='',flush=True)
+            dslist.append(self.H.xarray(f':{varn}:surface:anl'))
+        print('')
+        surf = xr.merge(dslist)
         ds['LANDMASK'] = surf['lsm']
         ds['SST']      = surf['t']
         ds['HGT']      = surf['orog']
         ds['PSFC']     = surf['sp']
 
+        if self.verbose:
+            print(ds)
         self.ds = ds
 
     def _setup_hrrr_grid(self):
