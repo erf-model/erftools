@@ -68,10 +68,18 @@ class NativeHRRR(object):
         """Combine data from hybrid levels with surface data; rename
         like WRF
         """
-        varstr = '|'.join(varlist)
-        ds = self.H.xarray(f':(?:{varstr}):\d+ hybrid') # get all levels
-        if isinstance(ds, list):
-            ds = xr.merge(ds)
+        # This may through a "WrongLengthError"...
+        #varstr = '|'.join(varlist)
+        #ds = self.H.xarray(f':(?:{varstr}):\d+ hybrid') # get all levels
+        #if isinstance(ds, list):
+        #    ds = xr.merge(ds)
+        dslist = []
+        print('Retrieving',end='')
+        for varn in gribvars:
+            print(f' {varn}',end='',flush=True)
+            dslist.append(self.H.xarray(f':(?:{varn}):\d+ hybrid'))
+        print('')
+        ds = xr.merge(dslist)
         ds = ds.rename_vars({
             'u': 'U',
             'v': 'V',
