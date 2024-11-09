@@ -79,13 +79,17 @@ class NativeHRRR(object):
         #ds = self.H.xarray(f':(?:{varstr}):\d+ hybrid') # get all levels
         #if isinstance(ds, list):
         #    ds = xr.merge(ds)
-        print('Retrieving hybrid-level variables:',end='')
-        dslist = []
-        for varn in gribvars:
-            print(f' {varn}',end='',flush=True)
-            dslist.append(self.H.xarray(f':{varn}:\d+ hybrid'))
-        print('')
-        ds = xr.merge(dslist)
+
+        #print('Retrieving hybrid-level variables:',end='')
+        #dslist = []
+        #for varn in gribvars:
+        #    print(f' {varn}',end='',flush=True)
+        #    dslist.append(self.H.xarray(f':{varn}:\d+ hybrid'))
+        #print('')
+        #ds = xr.merge(dslist)
+        gribpath = self.H.get_localFilePath()
+        ds = xr.open_dataset(gribpath,engine='cfgrib',
+                             filter_by_keys={'typeOfLevel':'hybrid'})
         ds = ds.rename_vars({
             'u': 'U',
             'v': 'V',
@@ -93,13 +97,16 @@ class NativeHRRR(object):
             'rwmr' : 'QRAIN',
         })
 
-        print('Retrieving surface variables:',end='')
-        dslist = []
-        for varn in surfgribvars:
-            print(f' {varn}',end='',flush=True)
-            dslist.append(self.H.xarray(f':{varn}:surface:anl'))
-        print('')
-        surf = xr.merge(dslist)
+        #print('Retrieving surface variables:',end='')
+        #dslist = []
+        #for varn in surfgribvars:
+        #    print(f' {varn}',end='',flush=True)
+        #    dslist.append(self.H.xarray(f':{varn}:surface:anl'))
+        #print('')
+        #surf = xr.merge(dslist)
+        surf = xr.open_dataset(gribpath,engine='cfgrib',
+                               filter_by_keys={'stepType':'instant',
+                                               'typeOfLevel':'surface'})
         ds['LANDMASK'] = surf['lsm']
         ds['SST']      = surf['t']
         ds['HGT']      = surf['orog']
