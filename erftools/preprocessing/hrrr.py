@@ -453,14 +453,14 @@ class NativeHRRR(object):
         msf_v = self.grid.calc_msf(lat_v)
 
         # create dataset with coordinates
-        inp = xr.Dataset(
-            coords={'XLAT' :(('south_north','west_east'),lat.astype(dtype)),
-                    'XLONG':(('south_north','west_east'),lon.astype(dtype)),
-                    'XLAT_U' :(('south_north','west_east_stag'),lat_u.astype(dtype)),
-                    'XLONG_U':(('south_north','west_east_stag'),lon_u.astype(dtype)),
-                    'XLAT_V' :(('south_north_stag','west_east'),lat_v.astype(dtype)),
-                    'XLONG_V':(('south_north_stag','west_east'),lon_v.astype(dtype))}
-        )
+        inp = xr.Dataset({
+            'XLAT' :   (('south_north','west_east'), lat.astype(dtype)),
+            'XLONG':   (('south_north','west_east'), lon.astype(dtype)),
+            'XLAT_U' : (('south_north','west_east_stag'), lat_u.astype(dtype)),
+            'XLONG_U': (('south_north','west_east_stag'), lon_u.astype(dtype)),
+            'XLAT_V' : (('south_north_stag','west_east'), lat_v.astype(dtype)),
+            'XLONG_V': (('south_north_stag','west_east'), lon_v.astype(dtype)),
+        })
         inp['Times'] = bytes(self.datetime.strftime('%Y-%m-%d_%H:%M:%S'),'utf-8')
 
         # interpolate staggered velocity fields
@@ -498,6 +498,18 @@ class NativeHRRR(object):
         inp['C1H'] = self.ds['C1H'].astype(dtype)
         inp['C2H'] = self.ds['C2H'].astype(dtype)
         inp['RDNW'] = self.ds['RDNW'].astype(dtype)
+
+        # add time dimension
+        inp = inp.expand_dims('Time',axis=0)
+
+        # make lat,lon data vars into coordinates, remove the rest
+        inp = inp.drop_vars(inp.coords)
+        inp = inp.assign_coords({'XLAT'   : inp['XLAT'],
+                                 'XLONG'  : inp['XLONG'],
+                                 'XLAT_U' : inp['XLAT_U'],
+                                 'XLONG_U': inp['XLONG_U'],
+                                 'XLAT_V' : inp['XLAT_V'],
+                                 'XLONG_V': inp['XLONG_V']})
 
         return inp
 
