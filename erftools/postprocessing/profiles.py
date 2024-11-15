@@ -200,11 +200,15 @@ class AveragedProfiles(object):
         for varn in varlist:
             self.ds[f'd{varn}/dz'] = self.ds[varn].diff(self.heightname) / dz
 
-    def calc_stress(self):
-        """Calculate total stresses (note: τ are deviatoric stresses)"""
+    def calc_stress(self,check=True):
+        """Calculate total stresses (note: τ are deviatoric stresses)
+
+        If check==True, assert that the SFS stress tensor is traceless
+        """
         trace = self.ds['τ11'] + self.ds['τ22'] + self.ds['τ33']
-        assert np.abs(trace).max() < 1e-8, \
-                f'SFS stresses do not sum to zero: {np.abs(trace).max()}'
+        if check:
+            assert np.abs(trace).max() < 1e-8, \
+                    f'SFS stresses do not sum to zero: {np.abs(trace).max()}'
         self.ds['uu_tot'] = self.ds["u'u'"] + self.ds['τ11'] + 2./3.*self.ds['e']
         self.ds['vv_tot'] = self.ds["v'v'"] + self.ds['τ22'] + 2./3.*self.ds['e']
         try:
