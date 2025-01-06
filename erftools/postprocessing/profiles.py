@@ -78,10 +78,10 @@ class AveragedProfiles(object):
         """
         assert (len(args) == 1) or (len(args) == 3)
         if len(args) == 1:
-            if isinstance(args[0], list):
+            if isinstance(args[0], (list,tuple)):
                 fpathlist = args[0]
                 assert len(fpathlist)<=3, \
-                    'Expected list of 3 separate profile datafiles'
+                    'Expected list of 1-3 separate profile datafiles'
             else:
                 assert isinstance(args[0], str)
                 fpathlist = sorted(glob.glob(args[0]))
