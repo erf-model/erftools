@@ -33,20 +33,24 @@ class SurfaceHistory(object):
             Calculate rolling mean with given interval; implies
             timedelta=True
         """
-        self.df = pd.read_csv(histfile, sep='\s+', names=self.surfvars)
-        self.df = self.df.drop_duplicates()
+        df = pd.read_csv(histfile, sep='\s+', names=self.surfvars)
+        if np.any(df.duplicated('t')):
+            print('Note: One or more restarts found in the history file,' \
+                  ' loading the latest')
+        df = df.drop_duplicates('t')
         if dt is not None:
-            dt0 = self.df['t'].iloc[0]
+            dt0 = df['t'].iloc[0]
             if not dt==dt0:
                 print('Warning: inconsistent specified dt and first step',dt,dt0)
-            self.df['t'] = t0 + (np.arange(len(self.df))+1)*dt
+            df['t'] = t0 + (np.arange(len(df))+1)*dt
         if timedelta or (resample is not None):
-            self.Tmax = self.df['t'].iloc[-1]
-            self.df['t'] = pd.to_timedelta(self.df['t'],unit='s')
-        self.df = self.df.set_index('t')
+            self.Tmax = df['t'].iloc[-1]
+            df['t'] = pd.to_timedelta(df['t'],unit='s')
+        df = df.set_index('t')
         if resample:
             assert isinstance(resample, str)
-            self.df = self.df.resample(resample).mean()
+            df = df.resample(resample).mean()
+        self.df = df
 
     def plot(self,*args,**plot_kwargs):
         """Quick plotting function"""
