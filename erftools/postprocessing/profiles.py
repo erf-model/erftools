@@ -106,6 +106,8 @@ class AveragedProfiles(object):
 
     def _read_text_data(self, fpath, columns):
         df = pd.read_csv(fpath, sep='\s+', header=None, names=columns)
+        if np.any(df.duplicated(self.timename)):
+            print('Note: One or more restarts found, loading the latest')
         df = df.set_index([self.timename,self.heightname])
         isdup = df.index.duplicated(keep='last')
         return df.loc[~isdup]
@@ -132,6 +134,12 @@ class AveragedProfiles(object):
         else:
             print('No SFS data available')
 
+        # trim dataframes (to handle data loading when simulation is still
+        # running and the profile datafiles have different lengths)
+        tmax = alldata[0].index.levels[0][-1]
+        for i,df in enumerate(alldata):
+            alldata[i] = df.loc[(slice(0,tmax),slice(None)),:]
+
         # create xarray dataset
         self.ds = pd.concat(alldata, axis=1).to_xarray()
 
@@ -140,7 +148,7 @@ class AveragedProfiles(object):
         if topval > 0:
             # profiles are not on staggered grid
             return
-        assert topval == 0
+        assert topval == 0, f'Found θ[k=-1] = {topval}?!'
         print('**Staggered output detected**')
         zstag = self.ds.coords['z'].values
         zcc = 0.5 * (zstag[1:] + zstag[:-1])
