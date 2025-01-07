@@ -208,10 +208,12 @@ class AveragedProfiles(object):
         for varn in varlist:
             self.ds[f'd{varn}/dz'] = self.ds[varn].diff(self.heightname) / dz
 
-    def calc_stress(self,check=True):
+    def calc_stress(self,check=False,ustar=0):
         """Calculate total stresses and fluxes (note: τ are deviatoric stresses)
 
         If check==True, assert that the SFS stress tensor is traceless
+
+        If ustar is specified, normalized momentum fluxes will be calculated
         """
         trace = self.ds['τ11'] + self.ds['τ22'] + self.ds['τ33']
         if check:
@@ -232,3 +234,11 @@ class AveragedProfiles(object):
         self.ds['ustar_tot'] = (  self.ds['uw_tot']**2
                                 + self.ds['vw_tot']**2)**0.25
         self.ds['hfx_tot'] = self.ds["θ'w'"] + self.ds['τθw']
+        if ustar > 0:
+            self.ds['uu_tot_norm'] = self.ds['uu_tot'] / ustar**2
+            self.ds['vv_tot_norm'] = self.ds['vv_tot'] / ustar**2
+            self.ds['ww_tot_norm'] = self.ds['ww_tot'] / ustar**2
+            self.ds['uw_tot_norm'] = self.ds['uw_tot'] / ustar**2
+            self.ds['uw_tot_norm'] = self.ds['uw_tot'] / ustar**2
+            self.ds['vw_tot_norm'] = self.ds['vw_tot'] / ustar**2
+            self.ds['shear_stress_norm'] = self.ds['ustar_tot']**2 / ustar**2
