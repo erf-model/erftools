@@ -6,21 +6,6 @@ from scipy.optimize import root_scalar
 from ..constants import R_d, Cp_d, Gamma, CONST_GRAV, p_0
 from .utils import get_lo_faces, get_hi_faces
 
-def blending_func(eta, etac=0.2):
-    """Relative weighting function to blend between terrain-following sigma
-    corodinate and pure pressure coordinate, B(η)
-
-    see dyn_em/nest_init_utils.F
-    """
-    if eta < etac:
-        return 0
-    B1 = 2. * etac**2 * ( 1. - etac )
-    B2 = -etac * ( 4. - 3. * etac - etac**3 )
-    B3 = 2. * ( 1. - etac**3 )
-    B4 = - ( 1. - etac**2 )
-    B5 = (1.-etac)**4
-    return ( B1 + B2*eta + B3*eta**2 + B4*eta**3 ) / B5
-
 
 class RealInit(object):
     """Initialize some quantities like WRF's real.exe
@@ -77,7 +62,7 @@ class RealInit(object):
                 self.eta = eta.astype(dtype)
             self.eta_stag = np.zeros(len(self.eta)+1, dtype=dtype)
             self.eta_stag[0] = 1.0
-            self.eta_stag[1:-1] = self.eta[1:] + self.eta[:-1]
+            self.eta_stag[1:-1] = 0.5*(self.eta[1:] + self.eta[:-1])
             self.eta_stag = self.eta_stag.rename(bottom_top='bottom_top_stag')
         self.rdnw = 1./self.eta_stag.diff('bottom_top_stag').rename(bottom_top_stag='bottom_top')
 
@@ -207,3 +192,78 @@ class RealInit(object):
         self.phm = phm
 
 
+def blending_func(eta, etac=0.2):
+    """Relative weighting function to blend between terrain-following sigma
+    corodinate and pure pressure coordinate, B(η)
+
+    see dyn_em/nest_init_utils.F
+    """
+    if eta < etac:
+        return 0
+    B1 = 2. * etac**2 * ( 1. - etac )
+    B2 = -etac * ( 4. - 3. * etac - etac**3 )
+    B3 = 2. * ( 1. - etac**3 )
+    B4 = - ( 1. - etac**2 )
+    B5 = (1.-etac)**4
+    return ( B1 + B2*eta + B3*eta**2 + B4*eta**3 ) / B5
+
+
+def get_zlevels_auto(nlev,dzbot,dzmax,dzstretch_s,dzstretch_u,
+                     ptop=5000.,T0=290.,verbose=False):
+    """Following the description in the WRF User's Guide, vertical
+    grid levels can be determined based on surface and maximum grid
+    spacings (dz0, dzmax) and the surface and upper stretching factors
+    (s0, s). Assuming an isothermal atmosphere.
+
+    See `levels` subroutine in dyn_em/module_initialize_real.F
+    """
+    zup = np.zeros(nlev+1) # Note: this is the staggered grid height, with
+    pup = np.zeros(nlev+1) #   0-based indices here corresponding to the
+    eta = np.zeros(nlev+1) #   1-based indices in the WRF code
+    zscale = R_d * T0 / CONST_GRAV
+    ztop = zscale * np.log(p_0 / ptop)
+    dz = dzbot
+    zup[1] = dzbot
+    pup[0] = p_0
+    pup[1] = p_0 * np.exp(-zup[0]/zscale)
+    eta[0] = 1.0
+    eta[1] = (pup[1] - ptop) / (p_0 - ptop)
+    if verbose:
+        print(0,None,zup[0],eta[0])
+        print(1,dz,zup[1],eta[1])
+    for i in range(1,nlev):
+        a = dzstretch_u + (dzstretch_s - dzstretch_u) \
+                        * max((0.5*dzmax - dz)/(0.5*dzmax), 0)
+        dz = a * dz
+        dztest = (ztop - zup[i]) / (nlev-i)
+        if dztest < dz:
+            # switch to constant dz
+            if verbose:
+                print('--- now, constant dz ---')
+            break
+        zup[i+1] = zup[i] + dz
+        pup[i+1] = p_0 * np.exp(-zup[i+1]/zscale)
+        eta[i+1] = (pup[i+1] - ptop) / (p_0 - ptop)
+        if verbose:
+            print(i+1,dz,zup[i+1],eta[i+1],'a=',a)
+        assert i < nlev, 'Not enough eta levels to reach p_top, need to:'\
+                         ' (1) add more eta levels,'\
+                         ' (2) increase p_top to reduce domain height,'\
+                         ' (3) increase min dz, or'\
+                         ' (4) increase the stretching factor(s)'
+    dz = (ztop - zup[i]) / (nlev - i)
+    assert dz <= 1.5*dzmax, 'Upper levels may be too thick, need to:'\
+                            ' (1) add more eta levels,'\
+                            ' (2) increase p_top to reduce domain height,'\
+                            ' (3) increase min dz'\
+                            ' (4) increase the stretching factor(s), or'\
+                            ' (5) increase max dz'
+    ilast = i
+    for i in range(ilast,nlev):
+        zup[i+1] = zup[i] + dz
+        pup[i+1] = p_0 * np.exp(-zup[i+1]/zscale)
+        eta[i+1] = (pup[i+1] - ptop) / (p_0 - ptop)
+        if verbose:
+            print(i+1,dz,zup[i+1],eta[i+1])
+    assert np.allclose(ztop,zup[-1])
+    return zup,pup,eta
