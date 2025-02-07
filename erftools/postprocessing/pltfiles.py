@@ -16,8 +16,12 @@ class Plotfile(object):
         else:
             yt.set_log_level('error')
 
+        if verbose:
+            print('Loading',fpath)
         self.pf = yt.load(fpath, *args, **kwargs)
         self.fields = [fld for (typ,fld) in self.pf.field_list if typ=='boxlib']
+        if verbose:
+            print('Found fields:',self.fields)
 
         # 1-D cordinate arrays
         self.coords1d = [None,None,None] # x1, y1, z1
@@ -35,27 +39,51 @@ class Plotfile(object):
 
         See https://yt-project.org/doc/examining/low_level_inspection.html
         """
-        dalist = []
-        for ig,g in enumerate(self.pf.index.grids):
-            lo_pt = g.LeftEdge.value
-            hi_pt = g.RightEdge.value
+        dslist = []
+        for fldname in self.fields:
+            # e.g., fldname == "x_velocity_stag"
+            if fldname.endswith('_stag'):
+                stagdim = fldname[0]
+            else:
+                stagdim = None
             if verbose:
-                print('Processing grid',ig,lo_pt,hi_pt)
+                print(f'Reading {fldname} (staggered dim: {stagdim})')
 
-            for fldname in self.fields:
+            # loop over grids
+            dalist = []
+            for ig,g in enumerate(self.pf.index.grids):
+                lo_pt = g.LeftEdge.value
+                hi_pt = g.RightEdge.value
+                if verbose:
+                    print('  grid',ig,lo_pt,hi_pt)
+
                 fld = g[fldname]
                 ncell = fld.shape
-                coords = [lo_pt[idim]
-                          + (hi_pt[idim]-lo_pt[idim])*np.arange(0.5,ncell[idim])/ncell[idim]
-                          for idim in range(3)]
-                da = xr.DataArray(fld.value,
-                                  coords={'x':coords[0],
-                                          'y':coords[1],
-                                          'z':coords[2]},
+
+                # setup dimension coordinates
+                coords = {'t': [self.pf.current_time.item()]}
+                for idim,coord in enumerate(['x','y','z']):
+                    if coord==stagdim:
+                        coords[coord+'_stag'] = \
+                                lo_pt[idim] \
+                                + (hi_pt[idim] - lo_pt[idim]) \
+                                * np.arange(ncell[idim]) / (ncell[idim]-1)
+                    else:
+                        coords[coord] = \
+                                lo_pt[idim] \
+                                + (hi_pt[idim] - lo_pt[idim]) \
+                                * np.arange(0.5,ncell[idim]) / ncell[idim]
+
+                # create dataarray
+                da = xr.DataArray(fld.value[np.newaxis,:,:,:],
+                                  coords=coords,
                                   name=fldname)
                 dalist.append(da)
-        ds = xr.merge(dalist)
-        return ds
+
+            ds = xr.merge(dalist)
+            dslist.append(ds)
+
+        return xr.merge(dslist)
 
     def slice(self, axis, loc, fields=None):
         """Create cutplane through the volume at index closest to the
