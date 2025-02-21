@@ -31,12 +31,13 @@ class LandUseTable(dict):
     summer_start_day = 105
     winter_start_day = 289
 
-    def __init__(self,fpath='LANDUSE.TBL'):
+    def __init__(self,fpath='LANDUSE.TBL',verbose=True):
         """Read specified LANDUSE.TBL file"""
         with open(fpath,'r') as f:
             name = f.readline().strip()
             while not name == '':
-                print('Reading',name)
+                if verbose:
+                    print('Reading table',name)
                 self.__setitem__(name, self._read_def(f))
                 name = f.readline().strip()
                 
