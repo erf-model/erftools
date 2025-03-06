@@ -33,11 +33,7 @@ class SurfaceHistory(object):
             Calculate rolling mean with given interval; implies
             timedelta=True
         """
-        df = pd.read_csv(histfile, sep='\s+', names=self.surfvars)
-        if np.any(df.duplicated('t')):
-            print(f'Note: One or more restarts found in {histfile},'
-                  ' loading the latest')
-        df = df.drop_duplicates('t')
+        df = self._read(histfile)
         if dt is not None:
             dt0 = df['t'].iloc[0]
             if not dt==dt0:
@@ -51,6 +47,23 @@ class SurfaceHistory(object):
             assert isinstance(resample, str)
             df = df.resample(resample).mean()
         self.df = df
+
+    def _read(self,histfile):
+        # see if we have a header, for backwards compatibility
+        with open(histfile,'r') as f:
+            firstline = f.readline().split()
+        assert len(firstline) == len(self.surfvars)
+        if all([s.isnumeric() for s in firstline]):
+            # no header
+            df = pd.read_csv(histfile, sep='\s+', names=self.surfvars)
+        else:
+            df = pd.read_csv(histfile, sep='\s+', names=self.surfvars, skiprows=1)
+        # only read the latest times
+        if np.any(df.duplicated('t')):
+            print('Note: One or more restarts found in the history file,' \
+                  ' loading the latest')
+        df = df.drop_duplicates('t',keep='last')
+        return df
 
     def plot(self,*args,**plot_kwargs):
         """Quick plotting function"""
