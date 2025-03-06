@@ -110,7 +110,7 @@ class AveragedProfiles(object):
             print('Note: One or more restarts found, loading the latest')
         df = df.set_index([self.timename,self.heightname])
         isdup = df.index.duplicated(keep='last')
-        return df.loc[~isdup]
+        return df.loc[~isdup].sort_index()
 
     def _load_profiles(self, mean_fpath, flux_fpath=None, sfs_fpath=None):
         alldata = []
