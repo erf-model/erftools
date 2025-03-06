@@ -244,3 +244,11 @@ class AveragedProfiles(object):
             self.ds['uw_tot_norm'] = self.ds['uw_tot'] / ustar**2
             self.ds['vw_tot_norm'] = self.ds['vw_tot'] / ustar**2
             self.ds['shear_stress_norm'] = self.ds['ustar_tot']**2 / ustar**2
+
+    def calc_wind(self):
+        u = self.ds['u']
+        v = self.ds['v']
+        w = self.ds['w']
+        self.ds['velmag'] = np.sqrt(u*u + v*v + w*w)
+        self.ds['wspd'] = np.sqrt(u*u + v*v)
+        self.ds['wdir'] = 180. + np.degrees(np.arctan2(u,v))
