@@ -200,7 +200,9 @@ class AveragedProfiles(object):
             self.ds[f'd{varn}/dt'] = self.ds[varn].diff(self.timename) / dt
 
     def calc_grad(self,*args):
-        """Calculate vertical gradient"""
+        """Calculate vertical gradient for specified fields; if none
+        specified, then all gradients are calculated
+        """
         dz = self.ds.coords[self.heightname][1] - self.ds.coords[self.heightname][0]
         print('dz=',dz.values)
         allvars = self.profile1vars + self.profile2vars + self.profile3vars
