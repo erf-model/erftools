@@ -199,16 +199,67 @@ class AveragedProfiles(object):
         for varn in varlist:
             self.ds[f'd{varn}/dt'] = self.ds[varn].diff(self.timename) / dt
 
-    def calc_grad(self,*args):
+    def calc_grad_firstorder(self,*args):
         """Calculate vertical gradient for specified fields; if none
-        specified, then all gradients are calculated
+        specified, then all gradients are calculated.
+
+        This performs a simple backward difference version and assumes a
+        constant dz.
         """
         dz = self.ds.coords[self.heightname][1] - self.ds.coords[self.heightname][0]
-        print('dz=',dz.values)
+        #print('dz=',dz.values)
         allvars = self.profile1vars + self.profile2vars + self.profile3vars
         varlist = args if len(args) > 0 else allvars
         for varn in varlist:
             self.ds[f'd{varn}/dz'] = self.ds[varn].diff(self.heightname) / dz
+
+    def calc_grad(self,*args,two_point=False):
+        """Calculate vertical gradient for specified fields; if none
+        specified, then all gradients are calculated.
+
+        This performs a second-order central difference for a two or three
+        point stencil width.
+        - If two_point=True, then differences are either calculated from k±1/2
+          and staggered to k (unstaggered quantitites) or calculated from k,k+1
+          and destaggered to k+1/2 (staggered quantities)
+        - If two_point=False, then differences are calculated from k±1 and
+          located at k (for both staggered and unstaggered quantities)
+        - Except for staggered to unstaggered, differences revert to first
+          order at boundaries
+        """
+        allvars = self.profile1vars + self.profile2vars + self.profile3vars
+        varlist = args if len(args) > 0 else allvars
+        for varn in varlist:
+            fld = self.ds[varn]
+            zdim = 'zstag' if 'zstag' in fld.coords else 'z'
+            dz = np.diff(fld.coords[zdim])
+            suffix = ''
+            if two_point:
+                if zdim=='zstag':
+                    print(f'diff {varn} from fc to cc')
+                    new_zdim = 'z'
+                    suffix = '(destag)'
+                    gradfld = np.diff(fld.values,axis=1) / dz
+                else:
+                    print(f'diff {varn} from cc to fc')
+                    new_zdim = 'zstag'
+                    suffix = '(stag)'
+                    gradfld = np.zeros((fld.sizes['t'],fld.sizes[zdim]+1))
+                    gradfld[:,1:-1] = np.diff(fld.values,axis=1) / dz
+                    gradfld[:, 0] = gradfld[:, 1]
+                    gradfld[:,-1] = gradfld[:,-2]
+            else:
+                if zdim=='zstag':
+                    print(f'diff {varn} at fc')
+                else:
+                    print(f'diff {varn} at cc')
+                new_zdim = zdim
+                fld = fld.values
+                gradfld = np.zeros_like(fld)
+                gradfld[:, 1:-1] = (fld[:,2:] - fld[:,:-2]) / ( dz[1:] + dz[:-1])
+                gradfld[:, 0] = (fld[:, 1] - fld[:, 0]) / dz[0]
+                gradfld[:,-1] = (fld[:,-1] - fld[:,-2]) / dz[-1]
+            self.ds[f'd{varn}/dz{suffix}'] = (('t',new_zdim), gradfld)
 
     def calc_stress(self,check=False,ustar=0):
         """Calculate total stresses and fluxes (note: τ are deviatoric stresses)
