@@ -163,16 +163,22 @@ class AveragedProfiles(object):
         # cell-centered: throw out values associated with highest z face, update coordinates
         cc = self.ds[ccvars].isel(z=slice(0,-1))
         cc = cc.assign_coords(z=zcc)
-        # average the staggered values to cell centers (destagger)
-        cc_destag = 0.5 * ( self.ds[stagvars].isel(z=slice(0,-1)).assign_coords(z=zcc)
-                          + self.ds[stagvars].isel(z=slice(1,None)).assign_coords(z=zcc))
-        cc_destag = cc_destag.assign_coords(z=zcc)
-        cc_destag = cc_destag.rename_vars({var:f'{var}_destag' for var in stagvars})
         # associate staggered outputs with new coordinate
-        stag = self.ds[stagvars]
-        stag = stag.rename(z='zstag')
+        fc = self.ds[stagvars]
+        fc = fc.rename(z='zstag')
+        # average the staggered values to cell centers (destagger)
+        fc_destag = 0.5 * ( self.ds[stagvars].isel(z=slice(0,  -1)).assign_coords(z=zcc)
+                          + self.ds[stagvars].isel(z=slice(1,None)).assign_coords(z=zcc))
+        fc_destag = fc_destag.assign_coords(z=zcc)
+        fc_destag = fc_destag.rename_vars({var:f'{var}_destag' for var in stagvars})
+        # average unstaggered values to face centers (stagger) -- just rho for now
+        cc_stag = 0.5 * ( self.ds[['ρ']].isel(z=slice(0,-1)).assign_coords(z=zstag[:-1])
+                        + self.ds[['ρ']].isel(z=slice(1,None)).assign_coords(z=zstag[1:]))
+        cc_stag = cc_stag.assign_coords(z=zstag[1:-1])
+        cc_stag = cc_stag.rename(z='zstag')
+        cc_stag = cc_stag.rename_vars({'ρ':'ρ_stag'})
         # combine into single dataset
-        self.ds = xr.merge([cc,cc_destag,stag])
+        self.ds = xr.merge([cc,fc_destag,fc,cc_stag])
 
     @property
     def t(self):
