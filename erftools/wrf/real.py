@@ -4,7 +4,7 @@ import xarray as xr
 from scipy.optimize import root_scalar
 
 from ..constants import R_d, Cp_d, Gamma, CONST_GRAV, p_0
-from ..utils import get_lo_faces, get_hi_faces
+from ..utils.xarray import get_lo_faces, get_hi_faces
 
 
 class RealInit(object):

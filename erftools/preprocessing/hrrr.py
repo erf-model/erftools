@@ -7,7 +7,8 @@ from herbie import Herbie
 
 from ..constants import R_d, R_v, Cp_d, Cp_v, CONST_GRAV, p_0
 from ..EOS import getPgivenRTh, getThgivenRandT, getThgivenPandT
-from ..utils import get_hi_faces, get_lo_faces, get_w_from_omega
+from ..utils import (get_hi_faces, get_lo_faces,
+                     get_w_from_omega, get_mass_weighted)
 from ..wrf.real import RealInit
 
 
@@ -112,11 +113,12 @@ class NativeHRRR(object):
         ds['HGT']      = surf['orog']
         ds['PSFC']     = surf['sp']
 
-        if self.verbose:
-            print(ds)
         self.ds = ds
 
     def _setup_hrrr_grid(self):
+        """The resulting grid is Cartesian with coordinates in the
+        Lambert Conformal CRS defined by x1 and y1.
+        """
         lat = self.ds.coords['latitude']
         lon = self.ds.coords['longitude']
         self.xlim = {}
@@ -153,6 +155,9 @@ class NativeHRRR(object):
         assert np.allclose(y1[:,0], y1[0,0]) # x values are ~constant
         self.y1 = y1[:,1]
 
+        self.dx = np.mean(np.diff(self.x1))
+        self.dy = np.mean(np.diff(self.y1))
+
         # create dimension coordinates
         self.ds = self.ds.assign_coords(x=self.x1, y=self.y1)
 
@@ -170,7 +175,7 @@ class NativeHRRR(object):
     def inventory(self):
         return self.H.inventory()
 
-    def clip(self,xmin,xmax,ymin,ymax,inplace=False):
+    def clip(self,xmin,xmax,ymin,ymax,zmax=None,inplace=False):
         """Clip the dataset based on x,y ranges in HRRR projected
         coordinates. If `inplace==False`, return a copy of the clipped
         dataset.
@@ -183,12 +188,17 @@ class NativeHRRR(object):
         ds = ds.rename_dims(x='west_east',
                             y='south_north',
                             hybrid='bottom_top')
+        if zmax is not None:
+            gh_avg = ds['gh'].mean(['south_north','west_east']).values
+            kmax = np.where(gh_avg > zmax)[0][0]
+            ds = ds.isel(bottom_top=slice(0,kmax))
+            print('Setting nz=',kmax)
         if inplace:
             self.ds = ds
         else:
             return ds
 
-    def _compare_arrays(self,arr1,arr2,checktype):
+    def _compare_arrays(self,arr1,arr2,checktype,desc=None):
         if isinstance(arr1, xr.DataArray):
             arr1 = arr1.values
         if isinstance(arr2, xr.DataArray):
@@ -199,19 +209,41 @@ class NativeHRRR(object):
             if not np.allclose(arr1, arr2):
                 abserr = np.abs(arr2 - arr1)
                 relerr = np.abs((arr2 - arr1) / arr1)
-                print(f'\x1b[31mWARNING: abserr={np.max(abserr):g} relerr={np.max(relerr)}\x1b[0m')
+                descstr = '' if desc is None else desc
+                print(f'\x1b[31mWARNING:\x1b[0m {descstr} abserr={np.max(abserr):g} relerr={np.max(relerr)}')
         else:
             print('Skipping check, unknown type=',checktype)
 
-    def calculate(self,check='assert'):
+    def calculate(self,check='assert',zeroW=False):
         """Do all calculations to provide a consistent wrf-like dataset
 
         `check` can be "warn" or "assert"
         """
         self.interpolate_na(inplace=True)
+
         self.derive_fields(check,inplace=True)
-        self.calc_real(inplace=True)
+
+        # handle clipping
+        eta = hrrr_eta  # this is staggered
+        nz = self.ds.sizes['bottom_top'] # unstaggered
+        nzmax = len(eta) - 1
+        if nz < nzmax:
+            clip = nzmax - nz
+            eta = eta[:-clip]
+
+        # calculate base state following WRF real.exe
+        self.calc_real(inplace=True,eta=eta)
+
         self.calc_perts(check,inplace=True)
+
+        rhow = self.rho_d.isel(bottom_top=-1,drop=True) \
+             * self.ds['W'].isel(bottom_top_stag=-1,drop=True)
+        zflux = rhow.sum(['south_north','west_east'])*self.dx*self.dy
+        print(f'Note: mass flux through top faces is {zflux.item():g}')
+
+        if zeroW:
+            print('Setting vertical velocity to zero')
+            self.ds['W'] *= 0.
 
     def interpolate_na(self,inplace=False):
         """Linearly interpolate between hybrid levels to remove any
@@ -259,7 +291,7 @@ class NativeHRRR(object):
             ds = self.ds.copy()
             ds = ds.drop_vars(['w','pres','t','q','gh'])
 
-        # water vapor mixing ratio, from definition of specified humidity
+        # water vapor mixing ratio, from definition of specific humidity
         qv = q / (1-q)
         ds['QVAPOR'] = qv
 
@@ -290,27 +322,35 @@ class NativeHRRR(object):
         ptop = ptop_faces.max()
         ds['P_TOP'] = ptop
 
-        # save for later
+        # save for reference
         self.p_dry = p_dry
         self.p_tot = p_tot
         self.rho_d = rho_d
+        self.rho_m = rho_m
         self.Tair = Tair
         self.gh = gh
 
         if check:
+            # from definition of moist potential temperature
             self._compare_arrays(getPgivenRTh(rho_d*th_m),
                                  getPgivenRTh(rho_d*th_d,qv=qv),
-                                 check)
-            self._compare_arrays(getPgivenRTh(rho_d*th_m), p_tot, check)
+                                 check,'moist EOS')
 
+            # from EOS, partial pressures
+            self._compare_arrays(getPgivenRTh(rho_d*th_m), p_tot,
+                                 check, 'EOS p_tot')
+
+            # from derivation of dry air density
             p_vap = rho_d*qv * R_v * Tair # vapor pressure
-            self._compare_arrays(p_tot, p_dry + p_vap, check)
+            self._compare_arrays(p_tot, p_dry + p_vap,
+                                 check, 'total pressure')
 
+            # from sum of partial densities
             eps = R_d / R_v
             self._compare_arrays(
                 rho_m,
-                p_tot/(R_d*Tair) * (1. - p_vap/p_tot*(1-eps)), # from sum of partial densities
-                check)
+                p_tot/(R_d*Tair) * (1. - p_vap/p_tot*(1-eps)),
+                check, 'sum of partial densities')
 
         if not inplace:
             return ds
@@ -375,15 +415,18 @@ class NativeHRRR(object):
             ph_hi = 2*CONST_GRAV*gh_avg - ph_lo - phb_hi - phb_lo
             ds['PH'].loc[dict(bottom_top_stag=k)] = ph_hi
 
+        self.zstag = (ds['PHB'] + ds['PH']) / CONST_GRAV
+        zl = get_lo_faces(self.zstag)
+        zh = get_hi_faces(self.zstag)
+        self.zcc = 0.5*(zl + zh)
+        self.dz = zh - zl
+        if check:
+            self._compare_arrays(self.zcc, self.gh, check, 'geopotential height')
+
         ds['MUB'] = self.real.mub
         ds['MU'] = (self.p_dry.isel(bottom_top=0)
                     - ds['C4F'].isel(bottom_top_stag=0)
                     - ds['P_TOP']) / ds['C3F'].isel(bottom_top_stag=0) - ds['MUB']
-
-        if check:
-            zf = (ds['PH'] + ds['PHB']) / CONST_GRAV
-            zh = 0.5*(get_hi_faces(zf) + get_lo_faces(zf))
-            self._compare_arrays(zh, self.gh, check)
 
         if not inplace:
             return ds
@@ -418,8 +461,8 @@ class NativeHRRR(object):
         return interpda.transpose(*dims[::-1]) # reverse dims to look like WRF
 
     def set_output_grid(self,grid):
-        """Calculate the output surface grid points in the HRRR
-        projection
+        """Transform the output surface grid points from the source grid
+        (a LambertConformalGrid object) to the HRRR projection
         """
         self.grid = grid
 
@@ -492,9 +535,9 @@ class NativeHRRR(object):
 
         # these are already on the output grid
         # note: MAPFAC_U == MAPFAC_UX == MAPFAC_UY, etc
-        inp['MAPFAC_UY'] = (('south_north', 'west_east_stag'), msf_u.astype(dtype))
-        inp['MAPFAC_VY'] = (('south_north_stag', 'west_east'), msf_v.astype(dtype))
-        inp['MAPFAC_MY'] = (('south_north', 'west_east'), msf.astype(dtype))
+        inp['MAPFAC_U'] = (('south_north', 'west_east_stag'), msf_u.astype(dtype))
+        inp['MAPFAC_V'] = (('south_north_stag', 'west_east'), msf_v.astype(dtype))
+        inp['MAPFAC_M'] = (('south_north', 'west_east'), msf.astype(dtype))
 
         # these only vary with height, no horizontal interp needed
         inp['C1H'] = self.ds['C1H'].astype(dtype)
@@ -605,7 +648,7 @@ class NativeHRRR(object):
             'Times': ('Time',
                       [bytes(self.datetime.strftime('%Y-%m-%d_%H:%M:%S'),'utf-8')])
         })
-        output_vars = ['U','V','W','PH','T','MU','QVAPOR','QCLOUD','QRAIN']
+        output_vars = ['U','V','PH','T','MU','QVAPOR','QCLOUD','QRAIN']
         for varn in output_vars:
             for bname,idxs in bndry.items():
                 # get all the buffer region planes
@@ -624,97 +667,15 @@ class NativeHRRR(object):
                               if dim.startswith('south_north')][0]
                     bt_dim = [dim for dim in bdy[bname][varn].dims
                               if dim.startswith('bottom_top')][0]
+                    # boundary-normal dimension
                     bw_dim = [dim for dim in bdy[bname][varn].dims
                               if dim.startswith(width_dim[bname])][0]
+                    # lateral dimension
                     lat_dim = we_dim if bw_dim==sn_dim else sn_dim
+                    # subset the field
                     fld = bdy[bname][varn].isel({we_dim: idxs[0],
                                                  sn_dim: idxs[1]})
                     fld = fld.rename({bw_dim:'bdy_width'})
                     fld = fld.transpose('bdy_width',bt_dim,lat_dim)
                     ds[f'{varn}_{bname}'] = fld.expand_dims('Time',axis=0)
         return ds
-
-
-def get_mass_weighted(varname,ds,**dims):
-    """Calculate the coupled or "mass weighted" field quantities
-
-    `dims` should be a single key=value pair used to select a boundary
-    plane. Planes on the high end should be selected with negative
-    indices.
-
-    Notes:
-    - The mass-weighted U and V are located at their respective
-      staggered locations
-    - The cell-centered column mass MU+MUB is staggered by averaging
-      interior values to faces and extrapolating values to boundary
-      faces
-
-    See https://forum.mmm.ucar.edu/threads/definitions-of-_btxe-and-_bxe-in-wrfbdy-output.187/#post-23322
-    E.g., the boundary values (the BXE, BYE, BXS, BYS arrays) for
-    the moist fields would be
-        qv(i,k,j)*C1(k) * ( mub(i,j) + mu(i,j) ) + C2(k).
-    """
-    assert len(dims.keys()) == 1, 'Can only specify one boundary coordinate at a time'
-
-    da = ds[varname].isel(**dims)
-
-    # get unstag_dim, idx, bdy_width
-    for dim,idx in dims.items():
-        if dim.endswith('_stag'):
-            unstag_dim = dim[:-5]
-        else:
-            unstag_dim = dim
-    low_end = (idx >= 0)
-    bdy_width = idx if low_end else -idx-1
-
-    mut = (ds['MUB']+ds['MU']).isel({unstag_dim:idx})
-    if varname == 'U':
-        # stagger in west-east direction
-        if dim == 'west_east_stag' and bdy_width > 0:
-            idx1 = bdy_width - 1
-            if not low_end:
-                idx1 = -idx1 - 1
-            mut1 = (ds['MUB']+ds['MU']).isel({unstag_dim:idx1})
-            mut = 0.5 * (mut + mut1)
-        elif dim == 'south_north':
-            mut = xr.concat([mut,mut.isel(west_east=-1)],'west_east')
-            mut = mut.rename(west_east='west_east_stag')
-            mut.loc[dict(west_east_stag=slice(1,-1))] = \
-                    0.5 * (mut.isel(west_east_stag=slice(1,-1)) +
-                           mut.isel(west_east_stag=slice(0,-2)))
-    elif varname == 'V':
-        # stagger in south-north direction
-        if dim == 'south_north_stag' and bdy_width > 0:
-            idx1 = bdy_width - 1
-            if not low_end:
-                idx1 = -idx1 - 1
-            mut1 = (ds['MUB']+ds['MU']).isel({unstag_dim:idx1})
-            mut = 0.5 * (mut + mut1)
-        elif dim == 'west_east':
-            mut = xr.concat([mut,mut.isel(south_north=-1)],'south_north')
-            mut = mut.rename(south_north='south_north_stag')
-            mut.loc[dict(south_north_stag=slice(1,-1))] = \
-                    0.5 * (mut.isel(south_north_stag=slice(1,-1)) +
-                           mut.isel(south_north_stag=slice(0,-2)))
-
-    if 'bottom_top' in da.dims:
-        C1 = ds['C1H']
-        C2 = ds['C2H']
-    elif 'bottom_top_stag' in da.dims:
-        C1 = ds['C1F']
-        C2 = ds['C2F']
-    else:
-        print('wtf')
-
-    # da    = f(z, x_or_y)
-    # mut   = f(x_or_y)
-    # C1,C2 = f(z)
-    coupled = da * (C1*mut + C2)
-
-    # couple momenta to inverse map factors
-    if varname == 'U':
-        coupled /= ds['MAPFAC_U'].isel(**dims)
-    elif varname == 'V':
-        coupled /= ds['MAPFAC_V'].isel(**dims)
-
-    return coupled
