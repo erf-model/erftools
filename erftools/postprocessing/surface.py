@@ -1,3 +1,4 @@
+import gzip
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -50,7 +51,11 @@ class SurfaceHistory(object):
 
     def _read(self,histfile):
         # see if we have a header, for backwards compatibility
-        with open(histfile,'r') as f:
+        if histfile.endswith('.gz'):
+            fopen = lambda fpath: gzip.open(fpath,'rt')
+        else:
+            fopen = lambda fpath: open(fpath,'r')
+        with fopen(histfile) as f:
             firstline = f.readline().split()
         assert len(firstline) == len(self.surfvars)
         if all([s.isnumeric() for s in firstline]):
