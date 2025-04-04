@@ -92,7 +92,7 @@ class AveragedProfiles(object):
         self._load_profiles(*fpathlist)
         if sampling_interval_s is not None:
             texact = t0 \
-                   + (np.arange(self.ds.dims[self.timename])+1) * sampling_interval_s
+                   + np.arange(self.ds.sizes[self.timename]) * sampling_interval_s
             self.ds = self.ds.assign_coords({self.timename: texact})
         if timedelta or (resample is not None):
             td = pd.to_timedelta(self.ds.coords[self.timename],unit='s')
