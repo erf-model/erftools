@@ -57,7 +57,7 @@ class Plotfile(object):
                 if verbose:
                     print('  grid',ig,lo_pt,hi_pt)
 
-                fld = g[fldname]
+                fld = g[('boxlib',fldname)]
                 ncell = fld.shape
 
                 # setup dimension coordinates
