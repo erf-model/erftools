@@ -74,6 +74,7 @@ class Plotfile(object):
 
             # loop over grids
             dalist = []
+            attrs = {}
             for ig,g in enumerate(self.pf.index.grids):
                 lo_pt = g.LeftEdge.value
                 hi_pt = g.RightEdge.value
@@ -85,6 +86,12 @@ class Plotfile(object):
                 fld[g.child_indices] = np.nan # blank regions where finer data are available
 
                 ncell = fld.shape
+                cellsizes = g.dds.value
+                dsstr = f'ds{lev}'
+                if dsstr in attrs:
+                    assert all(attrs[dsstr] == cellsizes)
+                else:
+                    attrs[dsstr] = cellsizes
 
                 # setup dimension coordinates
                 coords = {'t': [self.pf.current_time.item()]}
@@ -112,10 +119,21 @@ class Plotfile(object):
                                   name=fldname)
                 dalist.append(da)
 
+            # combine grid data into single dataset
             ds = xr.merge(dalist)
             dslist.append(ds)
 
-        return xr.merge(dslist)
+        # combine datasets for all vars
+        ds = xr.merge(dslist)
+
+        # add attributes
+        if max_level > 0:
+            for i in range(max_level):
+                rrv = attrs[f'ds{i}'] / attrs[f'ds{i+1}']
+                attrs[f'ref_ratio_vect{i}'] = rrv.astype(int)
+        ds.attrs = attrs
+
+        return ds
 
     def slice(self, axis, loc, fields=None):
         """Create cutplane through the volume at index closest to the
