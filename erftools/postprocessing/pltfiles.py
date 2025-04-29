@@ -31,8 +31,11 @@ class Plotfile(object):
         self.slc_order = [None,None,None]
         self.slc_shape = [None,None,None]
 
-    def to_xarray(self,verbose=False):
+    def to_xarray(self,fields=None,verbose=False):
         """Convert plotfile raw data to an xarray.Dataset.
+
+        By default, convert all fields. A subset of fields may be specified as
+        a list.
 
         Only single level handled for now. Will need to traverse
         through grids with index.grids[gid].Children[1].Children[0], etc...
@@ -40,7 +43,11 @@ class Plotfile(object):
         See https://yt-project.org/doc/examining/low_level_inspection.html
         """
         dslist = []
-        for fldname in self.fields:
+        if fields is None:
+            fields = self.fields
+        else:
+            assert isinstance(fields, (list,tuple))
+        for fldname in fields:
             # e.g., fldname == "x_velocity_stag"
             if fldname.endswith('_stag'):
                 stagdim = fldname[0]
