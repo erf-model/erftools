@@ -58,7 +58,6 @@ class Plotfile(object):
         for g in self.pf.index.grids:
             gridlevel.append(get_plt_grid_level(g))
         max_level = np.max(gridlevel)
-        print('max refinement level =',max_level)
 
         for fldname in fields:
             # e.g., fldname == "x_velocity_stag"
@@ -124,6 +123,7 @@ class Plotfile(object):
         ds = xr.merge(dslist)
 
         # add attributes
+        attrs['max_level'] = max_level
         if max_level > 0:
             for i in range(max_level):
                 rrv = attrs[f'ds{i}'] / attrs[f'ds{i+1}']
