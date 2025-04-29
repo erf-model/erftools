@@ -45,9 +45,6 @@ class Plotfile(object):
         By default, convert all fields. A subset of fields may be specified as
         a list.
 
-        Only single level handled for now. Will need to traverse
-        through grids with index.grids[gid].Children[1].Children[0], etc...
-
         See https://yt-project.org/doc/examining/low_level_inspection.html
         """
         dslist = []
