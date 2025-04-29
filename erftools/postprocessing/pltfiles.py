@@ -6,6 +6,14 @@ yt.set_log_level('error')
 
 xyz = ['x','y','z']
 
+def get_plt_grid_level(g):
+    """Traverse grid g in pltfile to find refinement level"""
+    lvl = 0
+    while g.Parent is not None:
+        g = g.Parent[0]
+        lvl += 1
+    return lvl
+
 class Plotfile(object):
     """Process cell-centered volume data"""
 
@@ -47,6 +55,14 @@ class Plotfile(object):
             fields = self.fields
         else:
             assert isinstance(fields, (list,tuple))
+
+        max_level = 0
+        gridlevel = []
+        for g in self.pf.index.grids:
+            gridlevel.append(get_plt_grid_level(g))
+        max_level = np.max(gridlevel)
+        print('max refinement level =',max_level)
+
         for fldname in fields:
             # e.g., fldname == "x_velocity_stag"
             if fldname.endswith('_stag'):
@@ -61,10 +77,13 @@ class Plotfile(object):
             for ig,g in enumerate(self.pf.index.grids):
                 lo_pt = g.LeftEdge.value
                 hi_pt = g.RightEdge.value
+                lev = gridlevel[ig]
                 if verbose:
-                    print('  grid',ig,lo_pt,hi_pt)
+                    print(' ',ig,g,lo_pt,hi_pt,'level',lev)
 
                 fld = g[('boxlib',fldname)]
+                fld[g.child_indices] = np.nan # blank regions where finer data are available
+
                 ncell = fld.shape
 
                 # setup dimension coordinates
@@ -81,8 +100,14 @@ class Plotfile(object):
                                 + (hi_pt[idim] - lo_pt[idim]) \
                                 * np.arange(0.5,ncell[idim]) / ncell[idim]
 
+                if max_level == 0:
+                    flddata = fld.value[np.newaxis,:,:,:]
+                else:
+                    coords['level'] = [lev]
+                    flddata = fld.value[np.newaxis,:,:,:,np.newaxis]
+
                 # create dataarray
-                da = xr.DataArray(fld.value[np.newaxis,:,:,:],
+                da = xr.DataArray(flddata,
                                   coords=coords,
                                   name=fldname)
                 dalist.append(da)
