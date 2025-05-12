@@ -93,7 +93,7 @@ class Plotfile(object):
                 coords = {'t': [self.pf.current_time.item()]}
                 for idim,coord in enumerate(['x','y','z']):
                     if coord==stagdim:
-                        coords[coord+'_stag'] = \
+                        coords[coord+'stag'] = \
                                 lo_pt[idim] \
                                 + (hi_pt[idim] - lo_pt[idim]) \
                                 * np.arange(ncell[idim]) / (ncell[idim]-1)
