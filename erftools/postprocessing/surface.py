@@ -78,9 +78,16 @@ class SurfaceHistory(object):
         tidx = self.df.index
         if isinstance(self.df.index, pd.TimedeltaIndex):
             tidx = tidx.total_seconds()
-        fig,axs = plt.subplots(nrows=len(varns),figsize=(5,2.5*len(varns)))
+        ax = plot_kwargs.pop('ax',None)
+        if ax is None:
+            fig,axs = plt.subplots(nrows=len(varns),figsize=(5,2.5*len(varns)))
+        else:
+            fig = None
+            axs = ax
         if len(varns) == 1:
             axs = [axs]
+        else:
+            assert len(varns) == len(axs)
         for varn,ax in zip(varns,axs):
             ax.plot(tidx, self.df[varn], **plot_kwargs)
             ax.set_ylabel(varn)
