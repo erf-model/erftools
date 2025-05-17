@@ -76,7 +76,7 @@ class AveragedProfiles(object):
             Calculate rolling mean with given interval; implies
             timedelta=True
         """
-        assert (len(args) == 1) or (len(args) == 3)
+        assert (len(args) >= 1) and (len(args) <= 3)
         if len(args) == 1:
             if isinstance(args[0], (list,tuple)):
                 fpathlist = args[0]
