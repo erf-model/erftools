@@ -27,7 +27,7 @@ class Plotfile(object):
         if verbose:
             print('Loading',fpath)
         self.pf = yt.load(fpath, *args, **kwargs)
-        self.fields = [fld for (typ,fld) in self.pf.field_list if typ=='boxlib']
+        self._set_metadata()
         if verbose:
             print('Found fields:',self.fields)
 
@@ -38,6 +38,26 @@ class Plotfile(object):
         self.slc_coords = [None,None,None] # yz, xz, xy planes
         self.slc_order = [None,None,None]
         self.slc_shape = [None,None,None]
+
+    def _set_metadata(self):
+        self.fields = [fld for (typ,fld) in self.pf.field_list if typ=='boxlib']
+        self.time = self.pf.current_time.value
+        self.dims = self.pf.domain_dimensions
+        self.prob_extent = self.pf.domain_width.value
+        self.attrs = {
+            'basename': self.pf.basename,
+            'filename': self.pf.filename,
+            'parameters': self.pf.parameters,
+            'domain_center': self.pf.domain_center.value,
+            'domain_width': self.pf.domain_width.value,
+            'domain_left_edge': self.pf.domain_left_edge.value,
+            'domain_right_edge': self.pf.domain_right_edge.value,
+        }
+        if 'erf.terrain_z_levels' in self.pf.parameters.keys():
+            self.terrain_z_levels = np.array(self.pf.parameters['erf.terrain_z_levels'])
+            self.stretched_dz = True
+        else:
+            self.stretched_dz = False
 
     def to_xarray(self,fields=None,verbose=False):
         """Convert plotfile raw data to an xarray.Dataset.
