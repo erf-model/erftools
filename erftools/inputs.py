@@ -2,6 +2,7 @@ import sys
 import contextlib
 import numpy as np
 
+# parameters parsed by AMReX's ParmParse
 from .parms import AMRParms, GeometryParms, ERFParms
 
 

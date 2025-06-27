@@ -77,6 +77,17 @@ extra_scalar_adv_schemes = [
     'WENOZ7'
 ]
 
+# corresponding to ERF InitType
+init_types = [
+    'none',
+    'uniform',
+    'input_sounding',
+    'wrfinput',
+    'metgrid',
+    'ncfile',
+]
+
+
 @dataclass
 class ERFParms:
     """erf.* parameters"""
@@ -292,8 +303,7 @@ class ERFParms:
         elif isinstance(self.input_sounding_file, list) \
                 and (len(self.input_sounding_file) > 0):
             self.input_sounding_file = self.input_sounding_file[0]
-        assert self.init_type.lower() in \
-                ['none','wrfinput','input_sounding','metgrid','uniform'], \
+        assert self.init_type.lower() in init_types, \
                 f'Invalid erf.init_type={self.init_type}'
         if self.init_type.lower() == 'real':
             assert isinstance(self.nc_init_file_0, str), \
