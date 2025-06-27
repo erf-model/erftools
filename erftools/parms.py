@@ -14,10 +14,16 @@ from pydantic import ConfigDict
 def check_unknown_params(data_dict, dataclass_type):
     known_params = set(dataclass_type.__dataclass_fields__.keys())
     provided_params = set(data_dict.keys())
-    unknown_params = provided_params - known_params
+    unknown_params = list(provided_params - known_params)
+
+    if 'refinement_indicators' in data_dict:
+        boxes = data_dict['refinement_indicators'].split()
+        for box in boxes:
+            unknown_params = [param for param in unknown_params
+                              if not param.startswith(f'{box}.')]
 
     if unknown_params:
-        print(f'Unknown {dataclass_type.__name__}: {unknown_params}')
+        print(f'Non-standard {dataclass_type.__name__} ignored: {unknown_params}')
 
 
 @dataclass(config=ConfigDict(extra='allow'))
