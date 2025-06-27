@@ -132,7 +132,7 @@ class ERFParms:
     terrain_z_levels: List[float] = field(default_factory=list)
 
     # Time Step
-    no_substepping: int = 0
+    substepping_type: str = 'DEFAULT'
     cfl: float = 0.8
     substepping_cfl: float = 1.0
     fixed_dt: float = np.nan
@@ -267,8 +267,12 @@ class ERFParms:
     def __post_init__(self):
         if self.anelastic:
             assert self.use_fft
-            assert self.no_substepping
             assert self.project_initial_velocity
+            if self.substepping_type == 'DEFAULT':
+                self.substepping_type = 'none'
+        else:
+            if self.substepping_type == 'DEFAULT':
+                self.substepping_type = 'implicit'
 
         if isinstance(self.refinement_indicators, str):
             self.refinement_indicators = [self.refinement_indicators]

@@ -243,20 +243,19 @@ geometry.is_periodic = {list_to_str(self.geometry.is_periodic)}
 
             ########################################
             f.write('\n# TIME STEP CONTROL\n')
+            f.write(f'erf.substepping_type = {self.erf.substepping_type}\n')
             if self.erf.fixed_dt > 0:
-                f.write(f'erf.fixed_dt        = {self.erf.fixed_dt}\n')
+                f.write(f'erf.fixed_dt         = {self.erf.fixed_dt}\n')
             else:
-                f.write(f'erf.cfl             = {self.erf.cfl}\n')
-            if self.erf.no_substepping == 1:
-                f.write('erf.no_substepping  = 1\n')
-            else:
+                f.write(f'erf.cfl              = {self.erf.cfl}\n')
+            if self.erf.substepping_type.lower() != 'none':
                 if self.erf.fixed_fast_dt > 0:
-                    f.write(f'erf.fixed_fast_dt   = {self.erf.fixed_fast_dt}\n')
+                    f.write(f'erf.fixed_fast_dt    = {self.erf.fixed_fast_dt}\n')
                 elif self.erf.fixed_mri_dt_ratio > 0:
-                    f.write('erf.fixed_mri_dt_ratio = '
+                    f.write('erf.fixed_mri_dt_ratio  = '
                             f'{self.erf.fixed_mri_dt_ratio}\n')
                 else:
-                    f.write('erf.substepping_cfl = '
+                    f.write('erf.substepping_cfl  = '
                             f'{self.erf.substepping_cfl}\n')
 
             ########################################
