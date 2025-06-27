@@ -3,7 +3,7 @@ import contextlib
 import numpy as np
 
 # parameters parsed by AMReX's ParmParse
-from .parms import AMRParms, GeometryParms, ERFParms
+from .parms import AMRParms, GeometryParms, ERFParms, check_unknown_params
 
 
 def parmparse(prefix, ppdata):
@@ -53,9 +53,17 @@ class ERFInputs(object):
         self.stop_date = ppdata.get('stop_date',None)
 
         # read amr, geometry, and erf inputs
-        self.amr = AMRParms(**parmparse('amr',ppdata))
-        self.geometry = GeometryParms(**parmparse('geometry',ppdata))
-        self.erf = ERFParms(**parmparse('erf',ppdata))
+        amrparms = parmparse('amr',ppdata)
+        check_unknown_params(amrparms, AMRParms)
+        self.amr = AMRParms(**amrparms)
+
+        geomparms = parmparse('geometry',ppdata)
+        check_unknown_params(geomparms, GeometryParms)
+        self.geometry = GeometryParms(**geomparms)
+
+        erfparms = parmparse('erf',ppdata)
+        check_unknown_params(erfparms, ERFParms)
+        self.erf = ERFParms(**erfparms)
 
         self.read_bcs(ppdata)
         self.read_refinement(ppdata)

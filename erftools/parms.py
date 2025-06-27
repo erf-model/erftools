@@ -8,9 +8,19 @@ import numpy as np
 from dataclasses import field
 from typing import List, Tuple, Union
 from pydantic.dataclasses import dataclass
+from pydantic import ConfigDict
 
 
-@dataclass
+def check_unknown_params(data_dict, dataclass_type):
+    known_params = set(dataclass_type.__dataclass_fields__.keys())
+    provided_params = set(data_dict.keys())
+    unknown_params = provided_params - known_params
+
+    if unknown_params:
+        print(f'Unknown {dataclass_type.__name__}: {unknown_params}')
+
+
+@dataclass(config=ConfigDict(extra='allow'))
 class AMRParms:
     """amr.* parameters"""
     n_cell: Tuple[int, int, int] = (0,0,0)
@@ -39,7 +49,7 @@ class AMRParms:
                 'Invalid directional refinement ratio(s)'
 
     
-@dataclass
+@dataclass(config=ConfigDict(extra='allow'))
 class GeometryParms:
     """geometry.* parameters"""
     prob_lo: Tuple[float, float, float] = (0.,0.,0.)
@@ -98,7 +108,7 @@ moisture_models = [
     'morrison', 'morrison_noice',
  ]
 
-@dataclass
+@dataclass(config=ConfigDict(extra='allow'))
 class ERFParms:
     """erf.* parameters"""
 
