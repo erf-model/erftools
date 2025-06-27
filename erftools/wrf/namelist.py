@@ -1,6 +1,7 @@
 """
 Processing for each namelist within a WRF namelist.input file
 """
+import warnings
 from datetime import datetime, timedelta
 
 from .namelist_mappings import *
@@ -207,7 +208,8 @@ class Physics(WRFNamelist):
         sfclay_idx_list = self.getarrayvar('sf_sfclay_physics')
         for pbl_idx,sfclay_idx in zip(pbl_idx_list, sfclay_idx_list):
             if sfclay_idx not in valid_sfclay[pbl_idx]:
-                print(f'WARNING: Unexpected pairing of bl_pbl_physics={pbl_idx} with sf_sfclay_idx={sfclay_idx}')
+                warnings.warn(f'Unexpected pairing of bl_pbl_physics={pbl_idx}'
+                              f' with sf_sfclay_idx={sfclay_idx}')
         self.bl_pbl_physics = [pbl_mapping.get(idx,'UNKNOWN') for idx in pbl_idx_list]
         for i in range(len(self.bl_pbl_physics)):
             if self.bl_pbl_physics[i] == 'MYNN':

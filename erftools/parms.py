@@ -3,7 +3,7 @@ Data container for ParmParse data
 
 see https://erf.readthedocs.io/en/latest/Inputs.html
 """
-
+import warnings
 import numpy as np
 from dataclasses import field
 from typing import List, Tuple, Union
@@ -23,7 +23,7 @@ def check_unknown_params(data_dict, dataclass_type):
                               if not param.startswith(f'{box}.')]
 
     if unknown_params:
-        print(f'Non-standard {dataclass_type.__name__} ignored: {unknown_params}')
+        warnings.warn(f'Non-standard {dataclass_type.__name__} ignored: {unknown_params}')
 
 
 @dataclass(config=ConfigDict(extra='allow'))
