@@ -126,6 +126,20 @@ class ERFInputs(object):
         self.refine = {}
         for box in self.erf.refinement_indicators:
             self.refine[box] = parmparse(f'erf.{box}',ppdata)
+            assert 'max_level' in self.refine[box]
+            self.refine[box]['max_level'] = int(self.refine[box]['max_level'])
+            assert self.refine[box]['max_level'] > 0
+            if 'in_box_lo' in self.refine[box]:
+                # static or dynamic refinement
+                assert 'in_box_hi' in self.refine[box]
+            else:
+                # dynamic refinement
+                assert 'field_name' in self.refine[box]
+            if 'field_name' in self.refine[box]:
+                tests = [parm for parm in self.refine[box]
+                         if parm not in ['max_level','field_name',
+                                         'in_box_lo','in_box_hi']]
+                assert len(tests) >= 1
 
     def validate(self):
         # additional validation that depends on different parmparse types
@@ -133,6 +147,12 @@ class ERFInputs(object):
             if self.erf.terrain_z_levels:
                 nz = self.amr.n_cell[2]
                 assert len(self.erf.terrain_z_levels) == nz+1
+
+        for box,refineparams in self.refine.items():
+            max_level = refineparams['max_level']
+            if max_level > self.amr.max_level:
+                print(f'Note: {box} refinement (max_level={max_level})'
+                      f' will be inactive with amr.max_level={self.amr.max_level}')
 
     def write(self,fpath=None):
         with open_file_or_stdout(fpath) as f:
