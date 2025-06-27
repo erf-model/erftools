@@ -126,20 +126,33 @@ class ERFInputs(object):
         self.refine = {}
         for box in self.erf.refinement_indicators:
             self.refine[box] = parmparse(f'erf.{box}',ppdata)
-            assert 'max_level' in self.refine[box]
-            self.refine[box]['max_level'] = int(self.refine[box]['max_level'])
-            assert self.refine[box]['max_level'] > 0
+            try:
+                self.refine[box]['max_level'] = int(self.refine[box]['max_level'])
+            except KeyError:
+                pass
+
             if 'in_box_lo' in self.refine[box]:
                 # static or dynamic refinement
                 assert 'in_box_hi' in self.refine[box]
             else:
                 # dynamic refinement
                 assert 'field_name' in self.refine[box]
+
             if 'field_name' in self.refine[box]:
                 tests = [parm for parm in self.refine[box]
                          if parm not in ['max_level','field_name',
-                                         'in_box_lo','in_box_hi']]
+                                         'in_box_lo','in_box_hi',
+                                         'start_time','end_time']]
                 assert len(tests) >= 1
+                for test in tests:
+                    # handle threshold values per level
+                    try:
+                        thresh = float(self.refine[box][test])
+                    except TypeError:
+                        thresh = [float(val) for val in self.refine[box][test]]
+                    else:
+                        thresh = [thresh]
+                    self.refine[box][test] = thresh
 
     def validate(self):
         # additional validation that depends on different parmparse types
@@ -149,10 +162,11 @@ class ERFInputs(object):
                 assert len(self.erf.terrain_z_levels) == nz+1
 
         for box,refineparams in self.refine.items():
-            max_level = refineparams['max_level']
-            if max_level > self.amr.max_level:
-                print(f'Note: {box} refinement (max_level={max_level})'
-                      f' will be inactive with amr.max_level={self.amr.max_level}')
+            if 'max_level' in refineparams and \
+                    refineparams['max_level'] > self.amr.max_level:
+                print(f'Note: {box} refinement'
+                      f' (max_level={refineparams["max_level"]}) will be inactive'
+                      f' with amr.max_level={self.amr.max_level}')
 
     def write(self,fpath=None):
         with open_file_or_stdout(fpath) as f:
@@ -258,11 +272,25 @@ erf.sum_interval = {self.erf.sum_interval}  # timesteps between computing mass
                 boxdict = self.refine[box]
                 f.write('\n')
                 if 'max_level' in boxdict.keys():
-                    f.write(f"erf.{box}.max_level = {boxdict['max_level']}\n")
-                f.write(f'erf.{box}.in_box_lo = '
-                        f"{list_to_str(boxdict['in_box_lo'],float)}\n")
-                f.write(f'erf.{box}.in_box_hi = '
-                        f"{list_to_str(boxdict['in_box_hi'],float)}\n")
+                    max_level = boxdict.pop('max_level')
+                    f.write(f'erf.{box}.max_level = {max_level}\n')
+                if 'in_box_lo' in boxdict.keys():
+                    in_box_lo = list_to_str(boxdict.pop('in_box_lo'),float)
+                    in_box_hi = list_to_str(boxdict.pop('in_box_hi'),float)
+                    f.write(f'erf.{box}.in_box_lo = {in_box_lo}\n')
+                    f.write(f'erf.{box}.in_box_hi = {in_box_hi}\n')
+                if 'field_name' in boxdict.keys():
+                    field_name = boxdict.pop('field_name')
+                    f.write(f'erf.{box}.field_name = {field_name}\n')
+                    if 'start_time' in boxdict.keys():
+                        start_time = boxdict.pop('start_time')
+                        f.write(f'erf.{box}.start_time = {start_time}\n')
+                    if 'end_time' in boxdict.keys():
+                        end_time = boxdict.pop('end_time')
+                        f.write(f'erf.{box}.end_time   = {end_time}\n')
+                    for key,vals in boxdict.items():
+                        testval = list_to_str(vals,float)
+                        f.write(f'erf.{box}.{key} = {testval}\n')
 
             ########################################
             if self.erf.grid_stretching_ratio > 1 or self.erf.have_terrain():
