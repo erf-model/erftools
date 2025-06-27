@@ -17,6 +17,8 @@ class AMRParms:
     max_level: int = 0
     ref_ratio: Union[int,List[int]] = 2
     ref_ratio_vect: List[int] = field(default_factory=list)
+    regrid_int: int = -1
+
     v: int = 0  # verbosity
 
     def __post_init__(self):
