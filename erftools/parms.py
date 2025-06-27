@@ -87,6 +87,14 @@ init_types = [
     'ncfile',
 ]
 
+# corresponding to ERF MoistureType
+moisture_models = [
+    'none',
+    'satadj',
+    'kessler', 'kessler_norain',
+    'sam', 'sam_noice', 'sam_noprecip_noice',
+    'morrison', 'morrison_noice',
+ ]
 
 @dataclass
 class ERFParms:
@@ -243,8 +251,10 @@ class ERFParms:
             assert self.use_fft
             assert self.no_substepping
             assert self.project_initial_velocity
+
         if isinstance(self.refinement_indicators, str):
             self.refinement_indicators = [self.refinement_indicators]
+
         assert self.cfl > 0 and self.cfl <= 1, 'erf.cfl out of range'
         assert self.substepping_cfl > 0 and self.substepping_cfl <= 1, \
                 'erf.substepping_cfl out of range'
@@ -255,6 +265,9 @@ class ERFParms:
             self.fixed_mri_dt_ratio = int(self.fixed_dt / self.fixed_fast_dt)
             assert self.fixed_mri_dt_ratio % 2 == 0, \
                     'erf.fixed_dt/erf.fixed_fast_dt should be even'
+
+        assert len(self.data_log) <= 4, 'Unexpected number of data_log files'
+
         if len(self.sample_line_lo) > 0:
             nlines = len(self.sample_line_lo) // 3
             assert len(self.sample_line_hi) == len(self.sample_line_lo)
@@ -264,8 +277,8 @@ class ERFParms:
                 assert len(self.sample_line_dir) == nlines
             else:
                 self.sample_line_dir = nlines*[2]
-        assert len(self.data_log) <= 4, 'Unexpected number of data_log files'
         assert len(self.sample_line_lo) == len(self.sample_line_hi)
+
         for vartype in ['dycore','dryscal','moistscal']:
             for advdir in ['horiz','vert']:
                 advinp = f'{vartype}_{advdir}_adv_type'
@@ -280,8 +293,10 @@ class ERFParms:
                 if advscheme.startswith('Blended'):
                     upwinding = getattr(self, f'{vartype}_{advdir}_upw_frac')
                     assert (upwinding >= 0) and (upwinding <= 1)
+
         assert self.molec_diff_type in ['None','Constant','ConstantAlpha'], \
                 f'Unexpected erf.molec_diff_type={erf.molec_diff_type}'
+
         les_types = self.les_type if isinstance(self.les_type,list) else [self.les_type]
         for turbmodel in les_types:
             assert turbmodel in ['None','Smagorinsky','Deardorff'], \
@@ -289,13 +304,16 @@ class ERFParms:
         if any([turbmodel == 'Smagorinsky' for turbmodel in les_types]):
             smag_Cs = self.Cs if isinstance(self.Cs,list) else len(les_types)*[self.Cs]
             assert all([Cs > 0 for Cs in smag_Cs]), 'Need to specify valid Smagorinsky Cs'
+
         pbl_types = self.pbl_type if isinstance(self.pbl_type,list) else [self.pbl_type]
         for pblscheme in pbl_types:
             assert pblscheme in ['None','MYNN25','YSU'], \
                     f'Unexpected erf.pbl_type={pblscheme}'
+
         assert self.abl_driver_type in \
                 ['None','PressureGradient','GeostrophicWind'], \
                 f'Unexpected erf.abl_driver_type={self.abl_driver_type}'
+
         if self.nudging_from_input_sounding \
                 and (len(self.input_sounding_file) > 1):
             assert len(self.input_sounding_file) == len(self.input_sounding_time), \
@@ -303,6 +321,7 @@ class ERFParms:
         elif isinstance(self.input_sounding_file, list) \
                 and (len(self.input_sounding_file) > 0):
             self.input_sounding_file = self.input_sounding_file[0]
+
         assert self.init_type.lower() in init_types, \
                 f'Invalid erf.init_type={self.init_type}'
         if self.init_type.lower() == 'real':
@@ -311,6 +330,7 @@ class ERFParms:
         elif self.init_type.lower() == 'metgrid' \
                 and isinstance(self.nc_init_file_0, str):
             self.nc_init_file_0 = [self.nc_init_file_0]
+
         if self.have_terrain():
             assert self.terrain_type.lower() in ['none','staticfittedmesh',
                                                  'movingfittedmesh',
@@ -318,11 +338,8 @@ class ERFParms:
                 f'Invalid erf.terrain_type {self.terrain_type}'
         assert (self.terrain_smoothing >= 0) and (self.terrain_smoothing <= 2),\
                 'Invalid erf.terrain_smoothing option'
-        assert self.moisture_model.lower() in \
-                ['sam','sam_noice',
-                 'kessler','kessler_norain',
-                 'satadj',
-                 'none'], \
+
+        assert self.moisture_model.lower() in moisture_models, \
                 f'Unexpected erf.moisture_model={self.moisture_model}'
 
     def have_terrain(self):
