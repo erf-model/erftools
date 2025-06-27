@@ -87,7 +87,7 @@ class ERFParms:
     mg_v: int = 0  # multigrid solver verbosiy when solving Poisson
 
     # Refinement
-    refinement_indicators: List[str] = field(default_factory=list)
+    refinement_indicators: Union[str,List[str]] = field(default_factory=list)
 
     # Grid Stretching
     grid_stretching_ratio: float = 1.
@@ -232,6 +232,8 @@ class ERFParms:
             assert self.use_fft
             assert self.no_substepping
             assert self.project_initial_velocity
+        if isinstance(self.refinement_indicators, str):
+            self.refinement_indicators = [self.refinement_indicators]
         assert self.cfl > 0 and self.cfl <= 1, 'erf.cfl out of range'
         assert self.substepping_cfl > 0 and self.substepping_cfl <= 1, \
                 'erf.substepping_cfl out of range'
