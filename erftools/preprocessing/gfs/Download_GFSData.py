@@ -6,6 +6,7 @@ import os
 from tqdm import tqdm
 import threading
 
+
 def read_user_input(filename):
     inputs = {}
     with open(filename, 'r') as f:
@@ -21,13 +22,13 @@ def read_user_input(filename):
                 inputs[key] = [value]
     return inputs
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
-def generate_urls_for_24_hours(data):
-    year = data['year'][0]
-    month = data['month'][0].zfill(2)
-    day = data['day'][0].zfill(2)
-    hour = data['time'][0].split(':')[0].zfill(2)
+def generate_urls_for_24_hours(inp):
+    year = inp['year'][0]
+    month = inp['month'][0].zfill(2)
+    day = inp['day'][0].zfill(2)
+    hour = inp['time'][0].split(':')[0].zfill(2)
 
     yyyymmddhh = f"{year}{month}{day}{hour}"
     yyyymmdd = f"{year}{month}{day}"
@@ -41,59 +42,54 @@ def generate_urls_for_24_hours(data):
         url = f"https://data-osdf.rda.ucar.edu/ncar/rda/d084001/{year}/{yyyymmdd}/{filename}"
         urls.append(url)
         filenames.append(filename)
+
     return urls, filenames 
 
-def construct_url_filename(data):
+def construct_url_filename(inp, product):
 
-    year = data['year'][0]        # your read_user_input returns a list for year
-    month = data['month'][0].zfill(2)
-    day = data['day'][0].zfill(2)
-    hour = data['time'][0].split(':')[0].zfill(2)
+    year = inp['year'][0]        # your read_user_input returns a list for year
+    month = inp['month'][0].zfill(2)
+    day = inp['day'][0].zfill(2)
+    hour = inp['time'][0].split(':')[0].zfill(2)
 
     yyyymmddhh = f"{year}{month}{day}{hour}"
     yyyymm = f"{year}{month}"
     yyyymmdd = f"{year}{month}{day}"
 
-    # Historical forecast data
-    filename = f"gfs.0p25.{yyyymmddhh}.f000.grib2"
-    url = f"https://data-osdf.rda.ucar.edu/ncar/rda/d084001/{year}/{yyyymmdd}/{filename}"
+    if product.lower() in ['forecast', 'd084001', 84.1]:
+        # Historical forecast data (0.25 deg x 0.25 deg grids, every 3h)
+        filename = f"gfs.0p25.{yyyymmddhh}.f000.grib2"
+        url = f"https://data-osdf.rda.ucar.edu/ncar/rda/d084001/{year}/{yyyymmdd}/{filename}"
 
-    # Final reanalaysis data
-    #filename = f"gdas1.fnl0p25.{yyyymmddhh}.f00.grib2"
-    #url = f"https://data-osdf.rda.ucar.edu/ncar/rda/d083003/{year}/{yyyymm}/{filename}"
-    
-    print("URL is ", url)
+    elif product.lower() in ['final', 'd083003', 83.3]:
+        # Final reanalaysis data (0.25 deg x 0.25 deg grids, every 6h)
+        filename = f"gdas1.fnl0p25.{yyyymmddhh}.f00.grib2"
+        url = f"https://data-osdf.rda.ucar.edu/ncar/rda/d083003/{year}/{yyyymm}/{filename}"
 
     return url, filename
 
-def Download_GFS_Data(inputs):
-    data = read_user_input(inputs)
-    lat_max, lon_min, lat_min, lon_max = data.get('area')
+def Download_GFS_Data(inputs, product='forecast'):
+    inp = read_user_input(inputs)
+    lat_max, lon_min, lat_min, lon_max = inp.get('area')
+    area = [lat_max, lon_min, lat_min, lon_max]
 
-    url, filename = construct_url_filename(data)
+    url, filename = construct_url_filename(inp, product)
+    if os.path.isfile(filename):
+        print('Gribfile found:',filename)
+        return filename, area
 
     print("Download URL:", url)
     print("Filename:", filename)
-
-    import urllib.request
     try:
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req) as response, open(filename, 'wb') as out_file:
             out_file.write(response.read())
-        print("Download complete.")
     except Exception as e:
         print("Download failed:", e)
+    else:
+        print("Download complete.")
 
-    area = [lat_max, lon_min, lat_min, lon_max]
     return filename, area
-
-def reporthook(block_num, block_size, total_size):
-    downloaded = block_num * block_size
-    percent = min(downloaded * 100 / total_size, 100)
-    sys.stdout.write(f"\r  Downloaded: {percent:.1f}%")
-    sys.stdout.flush()
-    if downloaded >= total_size:
-        print()  # Newline at end
 
 def download_one_with_progress(url, filename, position):
     def hook(block_num, block_size, total_size):
@@ -111,10 +107,10 @@ def download_one_with_progress(url, filename, position):
 
 
 def Download_GFS_ForecastData(inputs):
-    data = read_user_input(inputs)
-    lat_max, lon_min, lat_min, lon_max = data.get('area')
+    inp = read_user_input(inputs)
+    lat_max, lon_min, lat_min, lon_max = inp.get('area')
 
-    urls, filenames = generate_urls_for_24_hours(data)
+    urls, filenames = generate_urls_for_24_hours(inp)
 
     with ThreadPoolExecutor(max_workers=4) as executor:
         for i, (url, fname) in enumerate(zip(urls, filenames)):

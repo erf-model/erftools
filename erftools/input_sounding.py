@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 from .constants import R_d, Cp_d, Gamma, CONST_GRAV, p_0
 from .wrf.constants import rvovrd, cvpm
-from .EOS import getRhogivenThetaPress
+from .utils.EOS import getRhogivenThetaPress
 from .HSE import Newton_Raphson_hse
 
 

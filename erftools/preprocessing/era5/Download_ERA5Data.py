@@ -75,7 +75,7 @@ def Download_ERA5_ForecastData(inputs_file, forecast_time, interval):
 
     timestamps = generate_timestamps(start_time, forecast_time, interval)
 
-     # MPI setup
+    # MPI setup
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()
     size = comm.Get_size()
@@ -157,10 +157,17 @@ def Download_ERA5_Data(inputs):
     assert area[0] > area[2], "Latitude order invalid: North (1st) must be greater than South (3rd)"
     assert area[3] > area[1], "Longitude order invalid: East (4th) must be greater than West (2nd)"
 
-
-
-    # Download data
+    # Instantiate Copernicus client
     client = cdsapi.Client()
-    filename = client.retrieve(dataset, request).download()
-    print(f"Downloaded file: {filename}")
+    result = client.retrieve(dataset, request)
+    filename = result.location.split('/')[-1]
+
+    if os.path.isfile(filename):
+        print(f"File already downloaded: {filename}")
+    else:
+        print(f"Downloading {filename}")
+        downloaded = result.download()
+        print(f"Downloaded file: {downloaded}")
+        assert downloaded == filename
+
     return filename, area

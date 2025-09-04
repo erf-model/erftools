@@ -8,6 +8,8 @@ from erftools.preprocessing import Download_ERA5_Data
 from erftools.preprocessing import Download_ERA5_ForecastData
 from erftools.preprocessing import ReadERA5_3DData
 
+from erftools.utils.projection import create_lcc_mapping
+
 from pyproj import CRS, Transformer
 from numpy import *
 import pandas as pd
@@ -29,30 +31,6 @@ def read_user_input(filename):
                     data[key] = int(value)
     return data
 
-
-def CreateLCCMapping(area):
-
-    lat1 = area[2]
-    lat2 = area[0]
-    lon1 = area[1]
-    lon2 = area[3]
-
-    # Build CRS
-    delta = lat2 - lat1
-    lon0 = (lon1 + lon2) / 2
-    lat0 = (lat1 + lat2) / 2
-
-    lat_1 = lat1 + delta/6
-    lat_2 = lat2 - delta/6
-
-    lambert_conformal = (
-        f"+proj=lcc +lat_1={lat_1:.6f} +lat_2={lat_2:.6f} "
-        f"+lat_0={lat0:.6f} +lon_0={lon0:.6f} +datum=WGS84 +units=m +no_defs"
-    )
-
-    return lambert_conformal
-    
-
 if __name__ == "__main__":
 
      # --- Parse arguments ---
@@ -73,7 +51,7 @@ if __name__ == "__main__":
     print("User inputs:", user_inputs)
     area = user_inputs.get("area", None)
 
-    lambert_conformal = CreateLCCMapping(area)    
+    lambert_conformal = create_lcc_mapping(area)
 
     transformer = Transformer.from_crs("EPSG:4326", lambert_conformal, always_xy=True)
 

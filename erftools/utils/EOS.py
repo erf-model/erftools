@@ -1,5 +1,5 @@
 import numpy as np
-from .constants import Gamma, p_0, R_d, R_v, Cp_d, Cp_v
+from ..constants import Gamma, p_0, R_d, R_v, Cp_d, Cp_v
 
 def getThgivenPandT(T, P, rdOcp=R_d/Cp_d):
     return T * (p_0/P)**rdOcp
