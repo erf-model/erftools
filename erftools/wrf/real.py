@@ -241,10 +241,11 @@ def get_zlevels_auto(nlev,
     """Following the description in the WRF User's Guide, vertical
     grid levels can be determined based on surface and maximum grid
     spacings (dz0, dzmax) and the surface and upper stretching factors
-    (s0, s). Assuming an isothermal atmosphere T0 that is hard-coded in
-    WRF.
+    (s0, s). nlev is the number of unstaggered ("half") levels.
 
-    Returns _staggered_ grid heights, pressure levels, and eta levels.
+    Assuming an isothermal atmosphere T0 that is hard-coded in WRF.
+
+    Returns _staggered_ heights, pressure levels, and eta levels.
 
     See `levels` subroutine in dyn_em/module_initialize_real.F
     """
