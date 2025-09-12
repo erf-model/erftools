@@ -237,7 +237,10 @@ def get_zlevels_auto(nlev,
                      dzmax=1000.,
                      dzstretch_s=1.3,
                      dzstretch_u=1.1,
-                     ptop=5000.,T0=290.,verbose=False):
+                     ptop=5000.,
+                     T0=290.,
+                     geopotential_height=False,
+                     verbose=False):
     """Following the description in the WRF User's Guide, vertical
     grid levels can be determined based on surface and maximum grid
     spacings (dz0, dzmax) and the surface and upper stretching factors
@@ -299,4 +302,20 @@ def get_zlevels_auto(nlev,
         if verbose:
             print(i+1,dz,zup[i+1],eta[i+1])
     assert np.allclose(ztop,zup[-1])
+
+    # calculate geopotential height based on a standard atmosphere
+    if geopotential_height:
+        real = RealInit(eta_stag=eta, ptop=ptop)
+        phb = real.phb.values.squeeze()
+        zup = phb / CONST_GRAV
+
+        if verbose:
+            dz = np.diff(zup)
+            print(f'Full level index = {0:4d}   '
+                  f'Height = {zup[0]:7.1f} m')
+            for k in range(1,len(phb)):
+                print(f'Full level index = {k:4d}   '
+                      f'Height = {zup[k]:7.1f} m    '
+                      f'Thickness = {dz[k-1]:6.1f} m')
+
     return zup,pup,eta
