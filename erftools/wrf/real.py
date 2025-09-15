@@ -279,6 +279,9 @@ class RealInit(object):
         self.pfd = pfd
         self.phm = phm
 
+        self.zlevels = self.phb / self.g
+        self.z_top = self.zlevels.isel(bottom_top_stag=-1).squeeze().item()
+
 
 def blending_func(eta, etac=0.2):
     """Relative weighting function to blend between terrain-following sigma
@@ -370,8 +373,7 @@ def get_zlevels_auto(nlev,
     # calculate geopotential height based on a standard atmosphere
     if geopotential_height:
         real = RealInit(eta_levels=eta, ptop=ptop)
-        phb = real.phb.values.squeeze()
-        zup = phb / CONST_GRAV
+        zup = real.zlevels.values.squeeze()
 
         if verbose:
             dz = np.diff(zup)
