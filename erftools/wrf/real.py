@@ -18,11 +18,40 @@ class RealInit(object):
                  T0=290.0,A=50.,Tmin=200.,Tlp_strat=-11.,p_strat=0.,
                  etac=0.2,
                  dtype=np.float64):
-        """Start with just the base state, determined from surface
-        elevation alone
+        """Generate the base state, which is dictated by the surface
+        elevation and a set of atmospheric constants
+        -- see Section 5.2.2 in the WRF tech note
         
-        We can set constants to be 32-bit to enable closer comparisons
-        with real.exe outputs (wrfinput, wrfbdy)
+        We can set constants to be 32-bit to enable (marginally) closer
+        comparisons with real.exe outputs (wrfinput, wrfbdy)
+
+        Parameters
+        ----------
+        zsurf: xarray Dataset or DataArray
+            Surface elevation map with west_east, south_north dims
+        eta or eta_stag: array-like
+            Unstaggered/staggered array of eta levels (half/full levels,
+            respectively), with eta being 1 at the surface and 0 at ptop;
+            `eta_stag` corresponds to `eta_levels` in namelist.input
+        p_d: xarray Dataset or DataArray
+            Dry reference pressure in an air column at half levels
+            (bottom_top dim); specify eta or p_d
+        T0: float, optional
+            reference sea level temperature
+        A: float, optional
+            Temperature difference between p0 and p0/e, where p0 is the
+            reference sea level pressure, a model constant
+        Tmin: float, optional
+            Minimum temperature permitted
+        Tlp_strat: float, optional
+            Stndard stratosphere lapse rate
+        p_strat: float, optional
+            Pressure at which stratospheric warming begins
+        etac: float, optional
+            Altitude above which eta surfaces are isobaric
+        dtype: numpy numeric type, optional
+            Change precision to facilitate comparisons with real.exe
+            outputs (wrfinput, wrfbdy)
         """
         if zsurf is None:
             zsurf = xr.DataArray([[0]],dims=('west_east','south_north'),name='HGT')
