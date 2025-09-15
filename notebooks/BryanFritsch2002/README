@@ -1,7 +1,0 @@
-Files:
-
-* mbm.F - original file downloaded from https://www2.mmm.ucar.edu/people/bryan/Code/mbm.F
-* mbm.f90 - add output of initial base-state profile, successfully compiled with gfortran
-* init_base_state.ipynb - mbm.F ported to python, used to generate BryanFritsch2002_moist_sounding
-* compare_init_soundings.ipynb - compare outputs from original fortran and new python code
-
