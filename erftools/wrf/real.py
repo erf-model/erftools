@@ -82,9 +82,11 @@ class RealInit(object):
         # base-state dry air mass in column
         self.mub = self.pb_surf - self.p_top
 
+        self.etac = dtype(etac)
+        self._setup_hybrid_consts()
+
         if (eta_stag is not None) or (eta is not None) or (p_d is not None):
             # finish initialization
-            self.etac = dtype(etac)
             self.init_base_state(eta_stag=eta_stag, eta=eta, p_d=p_d, dtype=dtype)
         else:
             print('Note: Base state initialization incomplete; '
@@ -108,7 +110,7 @@ class RealInit(object):
                 self.eta_stag = xr.DataArray(eta_stag, dims='bottom_top_stag', name='eta')
         else:
             if eta is None:
-                self.calc_eta(p_d)
+                self._calc_eta(p_d)
             else:
                 if isinstance(eta,list):
                     eta = np.array(eta)
@@ -125,12 +127,12 @@ class RealInit(object):
         self.rdnw = 1./self.eta_stag.diff('bottom_top_stag').rename(bottom_top_stag='bottom_top')
 
         # calculate column functions
-        self.calc_column_funcs()
+        self._calc_column_funcs()
 
         # finish initializing the base state
-        self.calc_base_state()
+        self._calc_base_state()
     
-    def calc_eta(self,p_d):
+    def _calc_eta(self,p_d):
         """Calc WRF hybrid coordinate based on dry hydrostatic pressure
 
         Some base state quantities are initialized here...
@@ -157,7 +159,25 @@ class RealInit(object):
             eta[k] = soln.root
         self.eta = xr.DataArray(eta, dims='bottom_top')
 
-    def calc_column_funcs(self):
+    def _setup_hybrid_consts(self):
+        one   = self.dtype(1)
+        two   = self.dtype(2)
+        three = self.dtype(3)
+        four  = self.dtype(4)
+        etac  = self.etac
+
+        self.B1 = two * etac*etac * ( one - etac )
+        self.B2 = -etac * ( four - three * etac - etac*etac*etac )
+        self.B3 = two * ( one - etac*etac*etac )
+        self.B4 = - ( one - etac*etac )
+        self.B5 = np.power(one - etac, 4, dtype=self.dtype)
+        #print(self.B1/self.B5,
+        #      self.B2/self.B5,
+        #      self.B3/self.B5,
+        #      self.B4/self.B5,
+        #      (self.B1+self.B2+self.B3+self.B4)/self.B5)
+
+    def _calc_column_funcs(self):
         """For WRF hybrid coordinates ("HYBRID_OPT" == 2) with Klemp polynomial
         C3 = B(η)
         C4 = (η - B(η))(p_0 - p_top)
@@ -165,25 +185,19 @@ class RealInit(object):
         η_c (`etac`) is the eta at which the hybrid coordinate becomes
         a pure pressure coordinate
         """
-        one   = self.dtype(1)
-        two   = self.dtype(2)
-        three = self.dtype(3)
-        four  = self.dtype(4)
         half  = self.dtype(0.5)
-        etac  = self.etac
-
-        B1 = two * etac*etac * ( one - etac )
-        B2 = -etac * ( four - three * etac - etac*etac*etac )
-        B3 = two * ( one - etac*etac*etac )
-        B4 = - ( one - etac*etac )
-        B5 = np.power(one - etac, 4, dtype=self.dtype)
-        #print(B1/B5,B2/B5,B3/B5,B4/B5, (B1+B2+B3+B4)/B5)
+        one   = self.dtype(1)
+        B1    = self.B1
+        B2    = self.B2
+        B3    = self.B3
+        B4    = self.B4
+        B5    = self.B5
 
         # full levels (staggered)
         f = self.eta_stag
         self.C3f = ( B1 + B2*f + B3*f*f + B4*f*f*f ) / B5
         self.C3f[0] = 1
-        self.C3f[f < etac] = 0
+        self.C3f[f < self.etac] = 0
         self.C4f = ( f - self.C3f ) * ( self.p_0 - self.p_top )
         self.C3f.name = 'C3F'
         self.C4f.name = 'C4F'
@@ -200,8 +214,8 @@ class RealInit(object):
         dC3h = self.C3h.values[1:] - self.C3h.values[:-1]
         deta = self.eta.values[1:] - self.eta.values[:-1]
         self.C1f.loc[dict(bottom_top_stag=slice(1,-1))] = dC3h/deta
-        self.C1f[0] = 1
-        self.C1f[-1] = 0
+        self.C1f[0] = one
+        self.C1f[-1] = 0.0
         self.C2f = (one - self.C1f) * (self.p_0 - self.p_top)
         self.C1f.name = 'C1F'
         self.C2f.name = 'C2F'
@@ -211,7 +225,7 @@ class RealInit(object):
         self.C1h.name = 'C1H'
         self.C2h.name = 'C2H'
 
-    def calc_base_state(self):
+    def _calc_base_state(self):
         # dry hydrostatic base-state pressure (WRF Eqn. 5.4)
         self.pb = self.C3h * (self.pb_surf - self.p_top) + self.C4h + self.p_top
         self.pb.name = 'PB'
