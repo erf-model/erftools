@@ -82,7 +82,17 @@ class RealInit(object):
         # base-state dry air mass in column
         self.mub = self.pb_surf - self.p_top
 
-        # calculate hybrid coordinate
+        if (eta_stag is not None) or (eta is not None) or (p_d is not None):
+            # finish initialization
+            self.etac = dtype(etac)
+            self.init_base_state(eta_stag=eta_stag, eta=eta, p_d=p_d, dtype=dtype)
+        else:
+            print('Note: Base state initialization incomplete; '
+                  'none of eta_stag, eta, p_d was specified')
+
+    def init_base_state(self, eta_stag=None, eta=None, p_d=None,
+                        dtype=np.float64):
+        # calculate hybrid coordinate if not provided
         if eta_stag is not None:
             if isinstance(eta_stag,list):
                 eta_stag = np.array(eta_stag)
@@ -115,7 +125,7 @@ class RealInit(object):
         self.rdnw = 1./self.eta_stag.diff('bottom_top_stag').rename(bottom_top_stag='bottom_top')
 
         # calculate column functions
-        self.calc_column_funcs(dtype(etac))
+        self.calc_column_funcs()
 
         # finish initializing the base state
         self.calc_base_state()
@@ -147,7 +157,7 @@ class RealInit(object):
             eta[k] = soln.root
         self.eta = xr.DataArray(eta, dims='bottom_top')
 
-    def calc_column_funcs(self,etac):
+    def calc_column_funcs(self):
         """For WRF hybrid coordinates ("HYBRID_OPT" == 2) with Klemp polynomial
         C3 = B(η)
         C4 = (η - B(η))(p_0 - p_top)
@@ -160,6 +170,7 @@ class RealInit(object):
         three = self.dtype(3)
         four  = self.dtype(4)
         half  = self.dtype(0.5)
+        etac  = self.etac
 
         B1 = two * etac*etac * ( one - etac )
         B2 = -etac * ( four - three * etac - etac*etac*etac )
