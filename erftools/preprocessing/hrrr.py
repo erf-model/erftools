@@ -328,7 +328,7 @@ class NativeHRRR(object):
         else:
             ds = self.ds.copy()
 
-        real = RealInit(ds['HGT'], eta_stag=eta, ptop=ds['P_TOP'])
+        real = RealInit(ds['HGT'], eta_levels=eta, ptop=ds['P_TOP'])
         self.real = real
 
         # hybrid coordinate functions

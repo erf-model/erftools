@@ -13,7 +13,7 @@ class RealInit(object):
 
     def __init__(self,
                  zsurf=None,
-                 eta=None,eta_stag=None,p_d=None,
+                 eta_half_levels=None,eta_levels=None,p_d=None,
                  ptop=10e3,
                  T0=290.0,A=50.,Tmin=200.,Tlp_strat=-11.,p_strat=0.,
                  etac=0.2,
@@ -22,20 +22,19 @@ class RealInit(object):
         elevation and a set of atmospheric constants
         -- see Section 5.2.2 in the WRF tech note
         
-        We can set constants to be 32-bit to enable (marginally) closer
-        comparisons with real.exe outputs (wrfinput, wrfbdy)
+        Vertical levels are dictated by eta_levels, eta_half_levels, or
+        p_d.
 
         Parameters
         ----------
         zsurf: xarray Dataset or DataArray
             Surface elevation map with west_east, south_north dims
-        eta or eta_stag: array-like
-            Unstaggered/staggered array of eta levels (half/full levels,
-            respectively), with eta being 1 at the surface and 0 at ptop;
-            `eta_stag` corresponds to `eta_levels` in namelist.input
+        eta_levels or eta_half_levels: array-like
+            Array of full/half eta levels (i.e., staggered/unstaggered,
+            respectively), with eta being 1 at the surface and 0 at ptop
         p_d: xarray Dataset or DataArray
             Dry reference pressure in an air column at half levels
-            (bottom_top dim); specify eta or p_d
+            (bottom_top dim); specify eta_half_levels or p_d
         T0: float, optional
             reference sea level temperature
         A: float, optional
@@ -50,8 +49,8 @@ class RealInit(object):
         etac: float, optional
             Altitude above which eta surfaces are isobaric
         dtype: numpy numeric type, optional
-            Change precision to facilitate comparisons with real.exe
-            outputs (wrfinput, wrfbdy)
+            Change precision (e.g., to np.float32) to facilitate
+            comparisons with real.exe outputs (wrfinput, wrfbdy)
         """
         if zsurf is None:
             zsurf = xr.DataArray([[0]],dims=('west_east','south_north'),name='HGT')
@@ -85,46 +84,57 @@ class RealInit(object):
         self.etac = dtype(etac)
         self._setup_hybrid_consts()
 
-        if (eta_stag is not None) or (eta is not None) or (p_d is not None):
+        if ((eta_levels is not None) or
+            (eta_half_levels is not None) or
+            (p_d is not None)
+        ):
             # finish initialization
-            self.init_base_state(eta_stag=eta_stag, eta=eta, p_d=p_d, dtype=dtype)
+            self.init_base_state(eta_levels=eta_levels,
+                                 eta_half_levels=eta_half_levels,
+                                 p_d=p_d,
+                                 dtype=dtype)
         else:
             print('Note: Base state initialization incomplete; '
-                  'none of eta_stag, eta, p_d was specified')
+                  'none of eta_levels, eta_half_levels, p_d was specified')
 
-    def init_base_state(self, eta_stag=None, eta=None, p_d=None,
+    def init_base_state(self, eta_levels=None, eta_half_levels=None, p_d=None,
                         dtype=np.float64):
         # calculate hybrid coordinate if not provided
-        if eta_stag is not None:
-            if isinstance(eta_stag,list):
-                eta_stag = np.array(eta_stag)
-            eta_stag = eta_stag.astype(dtype)
-            if isinstance(eta_stag, xr.DataArray):
-                eta = 0.5*(  eta_stag.isel(bottom_top_stag=slice(1,None)).values
-                           + eta_stag.isel(bottom_top_stag=slice(0,  -1)).values )
-                self.eta = xr.DataArray(eta, dims='bottom_top', name='eta')
-                self.eta_stag = eta_stag
+        if eta_levels is not None:
+            if isinstance(eta_levels,list):
+                eta_levels = np.array(eta_levels)
+            eta_levels = eta_levels.astype(dtype)
+            if isinstance(eta_levels, xr.DataArray):
+                eta_h = 0.5*(  eta_levels.isel(bottom_top_stag=slice(1,None)).values
+                             + eta_levels.isel(bottom_top_stag=slice(0,  -1)).values )
+                self.eta_h = xr.DataArray(eta_h, dims='bottom_top', name='eta')
+                self.eta_f = eta_levels
             else:
-                self.eta = 0.5*(eta_stag[1:] + eta_stag[:-1])
-                self.eta = xr.DataArray(self.eta, dims='bottom_top', name='eta')
-                self.eta_stag = xr.DataArray(eta_stag, dims='bottom_top_stag', name='eta')
+                eta_h = 0.5*(eta_levels[1:] + eta_levels[:-1])
+                self.eta_h = xr.DataArray(eta_h, dims='bottom_top', name='eta')
+                self.eta_f = xr.DataArray(eta_levels, dims='bottom_top_stag', name='eta')
         else:
-            if eta is None:
+            # calculate or set self.eta_h
+            if eta_half_levels is None:
                 self._calc_eta(p_d)
             else:
-                if isinstance(eta,list):
-                    eta = np.array(eta)
-                self.eta = eta.astype(dtype)
-            if isinstance(self.eta, xr.DataArray):
-                eta = self.eta.values
+                if isinstance(eta_half_levels,list):
+                    eta_half_levels = np.array(eta_half_levels)
+                self.eta_h = eta_half_levels.astype(dtype)
+            # save eta at half levels
+            if isinstance(self.eta_h, xr.DataArray):
+                eta_h = self.eta_h.values
             else:
-                eta = self.eta
-                self.eta = xr.DataArray(self.eta, dims='bottom_top', name='eta')
-            eta_stag = np.zeros(len(eta)+1, dtype=dtype)
-            eta_stag[0] = 1.0
-            eta_stag[1:-1] = 0.5*(eta[1:] + eta[:-1])
-            self.eta_stag = xr.DataArray(eta_stag, dims='bottom_top_stag', name='eta')
-        self.rdnw = 1./self.eta_stag.diff('bottom_top_stag').rename(bottom_top_stag='bottom_top')
+                eta_h = self.eta_h
+                self.eta_h = xr.DataArray(eta_h, dims='bottom_top', name='eta')
+            # calculate eta at full levels
+            eta_levels = np.zeros(len(eta_h)+1, dtype=dtype)
+            eta_levels[0] = 1.0
+            eta_levels[1:-1] = 0.5*(eta_h[1:] + eta_h[:-1])
+            self.eta_f = xr.DataArray(eta_levels, dims='bottom_top_stag', name='eta')
+
+        self.rdnw = 1./self.eta_f.diff('bottom_top_stag').rename(bottom_top_stag='bottom_top')
+        self.eta_levels = self.eta_f # alias
 
         # calculate column functions
         self._calc_column_funcs()
@@ -157,7 +167,7 @@ class RealInit(object):
                 return B*mub + (η - B)*(self.p_0 - self.p_top) + self.p_top - pk
             soln = root_scalar(eqn5p4, bracket=(0,1))
             eta[k] = soln.root
-        self.eta = xr.DataArray(eta, dims='bottom_top')
+        self.eta_h = xr.DataArray(eta, dims='bottom_top')
 
     def _setup_hybrid_consts(self):
         one   = self.dtype(1)
@@ -194,7 +204,7 @@ class RealInit(object):
         B5    = self.B5
 
         # full levels (staggered)
-        f = self.eta_stag
+        f = self.eta_f
         self.C3f = ( B1 + B2*f + B3*f*f + B4*f*f*f ) / B5
         self.C3f[0] = 1
         self.C3f[f < self.etac] = 0
@@ -203,7 +213,7 @@ class RealInit(object):
         self.C4f.name = 'C4F'
 
         # half levels
-        h = self.eta
+        h = self.eta_h
         self.C3h = half*(self.C3f[1:] + self.C3f[:-1]).rename(bottom_top_stag='bottom_top')
         self.C4h = ( h - self.C3h ) * ( self.p_0 - self.p_top )
         self.C3h.name = 'C3H'
@@ -212,7 +222,7 @@ class RealInit(object):
         # c1 = dB/d(eta)
         self.C1f = 0.0*self.C3f
         dC3h = self.C3h.values[1:] - self.C3h.values[:-1]
-        deta = self.eta.values[1:] - self.eta.values[:-1]
+        deta = self.eta_h.values[1:] - self.eta_h.values[:-1]
         self.C1f.loc[dict(bottom_top_stag=slice(1,-1))] = dC3h/deta
         self.C1f[0] = one
         self.C1f[-1] = 0.0
@@ -252,7 +262,7 @@ class RealInit(object):
         self.rb.name = 'RB'
 
         # base-state geopotential from hypsometric equation
-        stag_dims = {'bottom_top_stag':len(self.eta_stag)}
+        stag_dims = {'bottom_top_stag':len(self.eta_levels)}
         for dim,n in self.z_surf.sizes.items():
             stag_dims[dim] = n
         pfu = get_hi_faces(self.C3f)*self.mub + get_hi_faces(self.C4f) + self.p_top
@@ -359,7 +369,7 @@ def get_zlevels_auto(nlev,
 
     # calculate geopotential height based on a standard atmosphere
     if geopotential_height:
-        real = RealInit(eta_stag=eta, ptop=ptop)
+        real = RealInit(eta_levels=eta, ptop=ptop)
         phb = real.phb.values.squeeze()
         zup = phb / CONST_GRAV
 
