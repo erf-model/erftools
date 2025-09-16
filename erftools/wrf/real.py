@@ -1,7 +1,7 @@
 import numpy as np
 import xarray as xr
 
-from scipy.optimize import root_scalar
+from scipy.optimize import root_scalar, minimize_scalar
 
 from ..constants import R_d, Cp_d, Gamma, CONST_GRAV, p_0
 from ..utils import get_lo_faces, get_hi_faces
@@ -93,9 +93,9 @@ class RealInit(object):
                                  eta_half_levels=eta_half_levels,
                                  p_d=p_d,
                                  dtype=dtype)
-        else:
-            print('Note: Base state initialization incomplete; '
-                  'none of eta_levels, eta_half_levels, p_d was specified')
+        #else:
+        #    print('Note: Base state initialization incomplete; '
+        #          'none of eta_levels, eta_half_levels, p_d was specified')
 
     def init_base_state(self, eta_levels=None, eta_half_levels=None, p_d=None,
                         dtype=np.float64):
@@ -148,11 +148,13 @@ class RealInit(object):
         Some base state quantities are initialized here...
         """
         assert p_d is not None, 'Need to call get_zlevels_auto to get eta levels'
+
+        if isinstance(p_d, np.ndarray):
+            assert len(p_d.shape) == 1
+            p_d = xr.DataArray(p_d, dims=['bottom_top'])
         
         # calculate eta from known dry pressure
-        print('Computing eta from',p_d.values)
-        assert isinstance(p_d, (xr.Dataset, xr.DataArray)), \
-                'Only xarray data supported for p_d for now'
+        #print('Computing eta from',p_d.values)
         assert len(p_d.dims) == 1, 'Expected column of pressures'
         assert ('bottom_top_stag' in p_d.dims) or \
                ('bottom_top' in p_d.dims), \
@@ -385,3 +387,76 @@ def get_zlevels_auto(nlev,
                       f'Thickness = {dz[k-1]:6.1f} m')
 
     return zup,pup,eta
+
+
+def get_eta_levels(zlevels, **kwargs):
+    """Calculate full eta levels and ptop corresponding to the specified
+    zlevels
+    """
+    nlev = len(zlevels) # full / staggered levels
+
+    # get constants
+    real = RealInit(**kwargs)
+    p0 = real.p_0
+    pb_surf = real.pb_surf.squeeze().item()
+    dpsurf = pb_surf - p0
+    c1 = real.B1/real.B5
+    c2 = real.B2/real.B5
+    c3 = real.B3/real.B5
+    c4 = real.B4/real.B5
+
+    def calc_gh(ptop, eta, zlo, ztarget):
+        eta = np.array(eta)
+
+        # base-state pressure, full levels (WRF tech note, Eqn. 5.4)
+        pb = (c1*dpsurf + ptop
+              + (c2*dpsurf + p0 - ptop) * eta
+              + c3*dpsurf * eta**2
+              + c4*dpsurf * eta**3)
+
+        # half level quantities
+        dpb = np.diff(pb)
+        pbmean = 0.5 * (pb[1:] + pb[:-1])
+
+        # reference dry temperature
+        Td = real.T0 + real.A*np.log(pbmean/p0)
+        Td = np.maximum(Td, real.Tmin)
+
+        # definition of geopotential height
+        zlev = zlo + np.sum(-287. * Td / pbmean * dpb) / CONST_GRAV
+        return np.abs(zlev - ztarget)
+
+    # first, calculate ptop
+    eta_levels = np.linspace(1.0, 0.0, nlev)
+    res = minimize_scalar(lambda ptop: calc_gh(ptop,
+                                               eta_levels,
+                                               0.0,
+                                               zlevels[-1]),
+                          bounds=(0, 1.2e5))
+    assert res.success
+    ptop = res.x
+
+    # then calculate eta, level by level
+    eta_levels = [1.0]
+    for k in range(1,nlev):
+        # values on previous level
+        eta0 = eta_levels[k-1]
+        pb0 = (c1*dpsurf + ptop
+              + (c2*dpsurf + p0 - ptop) * eta0
+              + c3*dpsurf * eta0**2
+              + c4*dpsurf * eta0**3)
+
+        res = minimize_scalar(lambda eta: calc_gh(ptop,
+                                                  [eta0, eta],
+                                                  zlevels[k-1],
+                                                  zlevels[k]),
+                              bounds=(0, eta0))
+        assert res.success
+        eta_levels.append(res.x)
+
+    eta_levels = np.array(eta_levels)
+
+    # enforce top boundary
+    eta_levels[-1] = 0.0
+
+    return eta_levels, ptop
