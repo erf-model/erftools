@@ -5,10 +5,11 @@ from scipy.interpolate import RegularGridInterpolator
 import cartopy.crs as ccrs
 from herbie import Herbie
 
-from ..constants import R_d, R_v, Cp_d, Cp_v, CONST_GRAV, p_0
-from ..EOS import getPgivenRTh, getThgivenRandT, getThgivenPandT
-from ..utils import get_hi_faces, get_lo_faces, get_w_from_omega
-from ..wrf.real import RealInit
+from erftools.constants import R_d, R_v, Cp_d, Cp_v, CONST_GRAV, p_0
+from erftools.utils.EOS import getPgivenRTh, getThgivenRandT, getThgivenPandT
+from erftools.utils.diag import get_w_from_omega
+from erftools.utils.xarray import get_hi_faces, get_lo_faces
+from erftools.wrf.real import RealInit
 
 
 hrrr_projection = ccrs.LambertConformal(
@@ -549,8 +550,8 @@ class NativeHRRR(object):
             ds = xr.Dataset()
 
             # interpolate staggered velocity fields
-            Ugrid = self.interpxy('U', self.xg_u[*idxs], self.yg_u[*idxs], dtype=dtype)
-            Vgrid = self.interpxy('V', self.xg_v[*idxs], self.yg_v[*idxs], dtype=dtype)
+            Ugrid = self.interpxy('U', self.xg_u[idxs], self.yg_u[idxs], dtype=dtype)
+            Vgrid = self.interpxy('V', self.xg_v[idxs], self.yg_v[idxs], dtype=dtype)
             ds['U'] = Ugrid.rename(west_east='west_east_stag')
             ds['V'] = Vgrid.rename(south_north='south_north_stag')
 
@@ -567,12 +568,12 @@ class NativeHRRR(object):
                 'QRAIN',
             ]
             for varn in unstag_interp_vars:
-                ds[varn] = self.interpxy(varn, self.xg[*idxs], self.yg[*idxs], dtype=dtype)
+                ds[varn] = self.interpxy(varn, self.xg[idxs], self.yg[idxs], dtype=dtype)
 
             # setup map scale factors
             sn_ew_idxs = idxs[::-1]
-            msf_u = self.grid.calc_msf(lat_u[*sn_ew_idxs])
-            msf_v = self.grid.calc_msf(lat_v[*sn_ew_idxs])
+            msf_u = self.grid.calc_msf(lat_u[sn_ew_idxs])
+            msf_v = self.grid.calc_msf(lat_v[sn_ew_idxs])
             ds['MAPFAC_U'] = (('south_north', 'west_east_stag'), msf_u.astype(dtype))
             ds['MAPFAC_V'] = (('south_north_stag', 'west_east'), msf_v.astype(dtype))
 

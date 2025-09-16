@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "erftools"
+version = "0.1.1"
+description = "Python code to make life easier for users of the Energy Research & Forecasting model"
+authors = [
+    {name = "U.S. Department of Energy", email = "eliot.quon@nrel.gov"}
+]
+readme = "README.md"
+license = "Apache-2.0"
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+requires-python = ">=3.9"
+
+dependencies = [
+    "numpy>=2.0.2",
+    "scipy>=1.13.1",
+    "pandas>=2.3.2",
+    "xarray>=2024.7.0",
+    "netcdf4>=1.7.2",
+    "pydantic",
+    "f90nml",
+    "click",
+]
+
+[project.optional-dependencies]
+dev = [
+    "jupyter",
+    "matplotlib",
+]
+performance = [
+    "dask>=2024.8.0",
+    "mpi4py>=4.1.0",
+]
+grib = [
+    "pygrib>=2.1.6",
+    "cdsapi>=0.7.6",
+    "herbie-data>=2024.8.0",
+    "cartopy>=0.23.0",
+    "pyproj>=3.6.1",
+]
+all = [
+    "erftools[dev,performance,grib]"
+]
+
+[tool.setuptools]
+packages = ["erftools"]
+
+# Console scripts -- creates command line tools
+[project.scripts]
+write_US_map = "erftools.utils.map:write_US_map_vtk"
+write_map_region = "erftools.utils.map:write_map_region_vtk"
+
+[project.urls]
+Homepage = "https://erf.readthedocs.io/en/latest/"
+Repository = "https://github.com/erf-model/erftools"
+Issues = "https://github.com/erf-model/erftools/issues"
+

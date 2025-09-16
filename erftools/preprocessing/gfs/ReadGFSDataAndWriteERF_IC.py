@@ -1,42 +1,20 @@
+from importlib import resources
 import pygrib
 import numpy as np
 import struct
-from pyproj import Proj, Transformer, CRS
-import matplotlib.pyplot as plt
+from pyproj import Transformer
 import sys
 import os
 from scipy.interpolate import interp1d
 
-from erftools.preprocessing import calculate_utm_zone
-from erftools.preprocessing import write_binary_vtk_structured_grid
+from erftools.io import write_binary_vtk_on_native_grid
 from erftools.preprocessing import write_binary_vtk_cartesian
 from erftools.preprocessing import plot_1d
 
+from erftools.constants import CONST_GRAV as const_g
+from erftools.utils.projection import calculate_utm_zone
+from erftools.utils.microphysics import p_sat
 
-
-#from IO import *
-#from Plot_1D import plot_1d
-#from Download_GFSData import *
-
-const_g = 9.81
-
-def p_sat(temp):
-    tC = temp - 273.15  # Convert temperature from Kelvin to Celsius
-
-    # Create masks for conditions
-    mask_positive = tC > 0.0
-    mask_negative = ~mask_positive
-
-    # Initialize ps with zeros (same shape as temp)
-    ps = np.zeros_like(temp)
-
-    # Compute ps for tC > 0
-    ps[mask_positive] = 6.112 * np.exp(17.62 * tC[mask_positive] / (tC[mask_positive] + 243.12))
-
-    # Compute ps for tC <= 0
-    ps[mask_negative] = 6.112 * np.exp(22.46 * tC[mask_negative] / (tC[mask_negative] + 272.62))
-
-    return ps
 
 def ReadGFS_3DData(file_path, area, lambert_conformal):
     # Open the GRIB2 file
@@ -133,9 +111,6 @@ def ReadGFS_3DData(file_path, area, lambert_conformal):
     temp_3d_hr3 = np.stack(temp_3d_hr3, axis=0)
     vort_3d_hr3 = np.stack(vort_3d_hr3, axis=0)
 
-
-        
-
     #pressure_3d_hr3 = np.stack(pressure_3d_hr3, axis=0)
     # Get the size of each dimension
     dim1, dim2, dim3 = ght_3d_hr3.shape
@@ -154,7 +129,6 @@ def ReadGFS_3DData(file_path, area, lambert_conformal):
     unique_lons = np.unique(lons[0, :])  # Take the first row for unique longitudes
 
     print("Min max lat lons are ", unique_lats[0], unique_lats[-1], unique_lons[0], unique_lons[-1]);
-
 
     nlats = len(unique_lats)
     nlons = len(unique_lons)
@@ -198,7 +172,6 @@ def ReadGFS_3DData(file_path, area, lambert_conformal):
 
     print("Size of rh_3d_hr3 is ", rh_3d_hr3.shape[0])
 
-
     prev_mean = np.mean(ght_3d_hr3[0])  # start from the top level
     for k in range(1, ght_3d_hr3.shape[0]):
         current_mean = np.mean(ght_3d_hr3[k])
@@ -220,8 +193,6 @@ def ReadGFS_3DData(file_path, area, lambert_conformal):
 
     print("The number of lats and lons are levels are %d, %d, %d"%(lats.shape[0], lats.shape[1], nz));
 
-    #sys.exit("Stopping the script here.")
-
     z_grid = np.zeros((nx, ny, nz))
     rhod_3d = np.zeros((nx, ny, nz))
     uvel_3d = np.zeros((nx, ny, nz))
@@ -241,7 +212,6 @@ def ReadGFS_3DData(file_path, area, lambert_conformal):
     pressure_3d = np.zeros((nx, ny, nz))
     theta_3d = np.zeros((nx, ny, nz))
 
-
     # Create meshgrid
     x_grid, y_grid = np.meshgrid(domain_lons, domain_lats)
     lon_grid, lat_grid = np.meshgrid(domain_lons, domain_lats)
@@ -255,10 +225,8 @@ def ReadGFS_3DData(file_path, area, lambert_conformal):
 
     print("size is ", len(qv_3d_hr3))
     
-    dirname = "./TypicalAtmosphereData/"
-    pressure_filename = dirname + "pressure_vs_z_actual.txt"
-
-    pressure_typical = np.loadtxt(pressure_filename)
+    with resources.open_text('erftools.data.typical_atmosphere', 'pressure_vs_z_actual.txt') as f:
+        pressure_typical = np.loadtxt(f)
     pressure_interp_func = interp1d(pressure_typical[:,1], pressure_typical[:,0], kind='linear', fill_value="extrapolate")
 
     # Find the index of the desired pressure level
@@ -324,26 +292,19 @@ def ReadGFS_3DData(file_path, area, lambert_conformal):
 
         print("Avg val is ", k, np.mean(z_grid[:,:,k]),  )
 
-
-
         #pressure_3d[:, :, k] = (temp_3d[:, :, k]/theta_3d[:, :, k])**(1004.5/287.0)*1000.0
         #pressure_3d[:, :, k] = 0.622*pv/qv_3d[:, :, k] + pv
         #pressure_3d[:, :, k] = 1000.0*np.exp(-const_g*(np.mean(z_grid[:,:,k])-0.0)/(287*temp_3d[:, :, k]*(1.0+1.6*qv_3d[:, :, k])))
 
         # Assuming quantities at surface is same as the first cell
-        if(k==nz-1):
+        if (k == nz-1):
             pressure_3d[:, :, k] = 1000.0 - 1000.0/(287*temp_3d[:, :, k]*(1.0+1.6*qv_3d[:, :, k]))*const_g*z_grid[:,:,k]
         else:
             pressure_3d[:, :, k] = pressure_3d[:, :, k+1] - pressure_3d[:, :, k+1]/(287*temp_3d[:, :, k+1]*(1.0+1.6*qv_3d[:, :, k+1]))*const_g*(z_grid[:,:,k]-z_grid[:,:,k+1])
 
-        qsat_3d[:,:,k] = 0.622*ps/(pressure_3d[:, :, k]-ps)
+        assert np.all(pressure_3d[:,:,k] > 0)
 
-        if(k==5):
-            for i in np.arange(0,nx,1):
-                for j in np.arange(0,ny,1):
-                    if(pressure_3d[i, j, k] <= 0.0):
-                        print("Value here problematic ", i, j, pressure_3d[i, j, k],pressure_3d[i, j, k+1],temp_3d[i, j, k+1],qv_3d[i, j, k+1],z_grid[i,j,k],z_grid[i,j,k+1])
-                
+        qsat_3d[:,:,k] = 0.622*ps/(pressure_3d[:, :, k]-ps)
 
         #pressure_typical_here = pressure_interp_func(np.mean(z_grid[:,:,k]));
         #indices = np.argwhere( (pressure_3d[:,:,k] <= 0.9*pressure_typical_here) | (pressure_3d[:,:,k] >= 1.02*pressure_typical_here))
@@ -361,7 +322,6 @@ def ReadGFS_3DData(file_path, area, lambert_conformal):
 
         theta_3d[:,:,k] = temp_3d[:, :, k]*(1000.0/pressure_3d[:, :, k])**(287.0/1004.5)
 
-
         # Find indices of elements that are zero or less
         #indices = np.argwhere(qv_3d[:, :, k] <= 0)
         indices = np.argwhere(rh_val <= 0)
@@ -376,10 +336,10 @@ def ReadGFS_3DData(file_path, area, lambert_conformal):
         velocity[:,:,k,1] = vvel_at_lev
         velocity[:,:,k,2] = 0.0
 
-
         #print(f"Lat and lon are: {lat_grid[0,0]:.2f}, {lon_grid[0,0]:.2f}")
         #print(f"Temperature: {temp_3d[0,0,k]:.2f} K, Pressure: {pressure_3d[0,0,k]:.2f}, Geo height : {z_grid[0,0,k]:.2f} ")
 
+    #-- end of k-loop from top to bottom
 
     scalars = {
          #"latitude": None,
@@ -399,7 +359,6 @@ def ReadGFS_3DData(file_path, area, lambert_conformal):
          "qsat": qsat_3d,
     }
 
-
     dir_path = "Images"
     os.makedirs(dir_path, exist_ok=True)
 
@@ -415,9 +374,11 @@ def ReadGFS_3DData(file_path, area, lambert_conformal):
 
     output_binary = "./Output/ERF_IC_" + date_time_forecast_str + ".bin"
 
-    write_binary_vtk_structured_grid(output_vtk, x_grid, y_grid, z_grid,
-                                     nz, k_to_delete, True,
-                                     scalars, velocity)
+    write_binary_vtk_on_native_grid(output_vtk,
+                                    x_grid, y_grid, z_grid,
+                                    k_to_delete=k_to_delete,
+                                    point_data=scalars,
+                                    velocity=velocity)
 
     write_binary_vtk_cartesian(date_time_forecast_str, output_binary, domain_lats, domain_lons,
                                x_grid, y_grid, z_grid,

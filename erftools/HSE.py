@@ -1,7 +1,7 @@
 import numpy as np
 
 from .constants import R_d, Cp_d, CONST_GRAV
-from .EOS import getRhogivenThetaPress
+from .utils.EOS import getRhogivenThetaPress
 
 def Newton_Raphson_hse(p,F,dz,C,T,qv,
                        qt=None,

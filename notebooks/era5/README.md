@@ -32,3 +32,16 @@ The domain extents to be used for the ERF run is written into `Output/domain_ext
 
 Various example inputs for different hurricanes are provided in this folder. 
 
+
+## VTK Visualization
+
+To output a map of the US based on the Lambert conformal conic projection
+centered over a specified area (corresponding to the input above):
+```
+write_US_map USMap_LambertProj.vtk --area 50 -130 10 -50
+```
+
+To output the NOAA forecast cone over the same region:
+```
+write_map_region HurricaneLaura_NOAA.csv NOAAForecastCone.vtk --area 50 -130 10 -50
+```
