@@ -1,8 +1,11 @@
+from importlib import resources
+
 import numpy as np
 import xarray as xr
 from scipy.interpolate import RegularGridInterpolator
 
 import cartopy.crs as ccrs
+from pyproj import Transformer
 from herbie import Herbie
 
 from ..constants import R_d, R_v, Cp_d, Cp_v, CONST_GRAV, p_0
@@ -51,6 +54,26 @@ surfgribvars = [
     'TMP',
     'PRES'
 ]
+
+
+def get_hrrr_grid():
+    with resources.files('erftools.data').joinpath('hrrr_v4_grid.npz') as fpath:
+        grid = np.load(fpath)
+    xx,yy = np.meshgrid(grid['x'], grid['y'])
+
+    transformer = Transformer.from_crs(hrrr_projection, 'EPSG:4326')
+    lat, lon = transformer.transform(xx, yy)
+
+    return xr.Dataset(
+        {
+            'latitude':  (('y','x'), lat),
+            'longitude': (('y','x'), lon),
+        },
+        coords={
+            'x': grid['x'],
+            'y': grid['y'],
+        }
+    )
 
 
 class NativeHRRR(object):

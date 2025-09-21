@@ -1,5 +1,6 @@
 from ..wrf.inputdeck import WRFInputDeck
 from .grids import LambertConformalGrid
+from .hrrr import get_hrrr_grid
 
 try:
     import cdsapi
