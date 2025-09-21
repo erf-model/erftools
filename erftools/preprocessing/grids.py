@@ -2,60 +2,16 @@ import numpy as np
 import cartopy.crs as ccrs
 
 
-class LambertConformalGrid(object):
-    """Given WRF projection parameters, setup a projection and calculate
-    map scale factors
+class NestedGrids(object):
+    """Container for nested grids with projected coordinates with the
+    same map projection
     """
-    def __init__(self,
-                 ref_lat, ref_lon,
-                 truelat1, truelat2=None,
-                 stand_lon=None,
-                 dx=None, dy=None,
-                 nx=None, ny=None,
-                 earth_radius=6370000.):
-        """Initialize projection on a spherical datum with grid centered
-        at (ref_lat, ref_lon).
-
-        Parameters
-        ----------
-        ref_lat, ref_lon: float
-            Central latitude and longitude in degrees
-        truelat1, truelat2: float
-            Standard parallel(s) at which the map scale is unity
-        stand_lon: float, optional
-            Central meridian
-        dx, dy : float
-            Grid spacing in west-east, south-north directions
-        nx, ny : int
-            Number of cells in the west-east, south-north directions
-        earth_radius: float
-            Radius of the earth approximated as a sphere
-        """
-        self.ref_lat = ref_lat
-        self.ref_lon = ref_lon
-        if (truelat2 is None) or (truelat2==truelat1):
-            truelat2 = None
-            standard_parallels = [truelat1]
-        else:
-            standard_parallels = [truelat1,truelat2]
-        self.truelat1 = truelat1
-        self.truelat2 = truelat2
-        if stand_lon is None:
-            stand_lon = ref_lon
+    def __init__(self, proj, dx, dy, nx, ny):
+        self.proj = proj
         self.dx = dx
         self.dy = dy
         self.nx = nx
         self.ny = ny
-        self.proj = ccrs.LambertConformal(
-            central_longitude=stand_lon,
-            central_latitude=ref_lat,
-            standard_parallels=standard_parallels,
-            globe=ccrs.Globe(
-                ellipse="sphere",
-                semimajor_axis=earth_radius,
-                semiminor_axis=earth_radius,
-            ),
-        )
         if self.dx and self.nx and self.ny:
             self.setup_grid()
 
@@ -109,6 +65,59 @@ class LambertConformalGrid(object):
             self.lat_v = lat
             self.lon_v = lon
         return lat,lon
+
+
+class LambertConformalGrid(NestedGrids):
+    """Given WRF projection parameters, setup a projection and calculate
+    map scale factors
+    """
+    def __init__(self,
+                 ref_lat, ref_lon,
+                 truelat1, truelat2=None,
+                 stand_lon=None,
+                 dx=None, dy=None,
+                 nx=None, ny=None,
+                 earth_radius=6370000.):
+        """Initialize projection on a spherical datum with grid centered
+        at (ref_lat, ref_lon).
+
+        Parameters
+        ----------
+        ref_lat, ref_lon: float
+            Central latitude and longitude in degrees
+        truelat1, truelat2: float
+            Standard parallel(s) at which the map scale is unity
+        stand_lon: float, optional
+            Central meridian
+        dx, dy : float
+            Grid spacing in west-east, south-north directions
+        nx, ny : int
+            Number of cells in the west-east, south-north directions
+        earth_radius: float
+            Radius of the earth approximated as a sphere
+        """
+        self.ref_lat = ref_lat
+        self.ref_lon = ref_lon
+        if (truelat2 is None) or (truelat2==truelat1):
+            truelat2 = None
+            standard_parallels = [truelat1]
+        else:
+            standard_parallels = [truelat1,truelat2]
+        self.truelat1 = truelat1
+        self.truelat2 = truelat2
+        if stand_lon is None:
+            stand_lon = ref_lon
+        proj = ccrs.LambertConformal(
+            central_longitude=stand_lon,
+            central_latitude=ref_lat,
+            standard_parallels=standard_parallels,
+            globe=ccrs.Globe(
+                ellipse="sphere",
+                semimajor_axis=earth_radius,
+                semiminor_axis=earth_radius,
+            ),
+        )
+        super().__init__(proj,dx,dy,nx,ny)
 
     def calc_msf(self,lat):
         """From WRF WPS process_tile_module.F"""
