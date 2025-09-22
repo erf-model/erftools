@@ -160,6 +160,10 @@ class ERFInputs(object):
             if 'in_box_lo' in self.refine[box]:
                 # static or dynamic refinement
                 assert 'in_box_hi' in self.refine[box]
+                self.refine[box]['in_box_lo'] = np.array(self.refine[box]['in_box_lo'],
+                                                         dtype=float)
+                self.refine[box]['in_box_hi'] = np.array(self.refine[box]['in_box_hi'],
+                                                         dtype=float)
             else:
                 # dynamic refinement
                 assert 'field_name' in self.refine[box]
