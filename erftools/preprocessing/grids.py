@@ -1,5 +1,6 @@
 import numpy as np
 import cartopy.crs as ccrs
+import pyproj
 
 
 class GridLevel(object):
@@ -28,13 +29,13 @@ class NestedGrids(object):
             if dy is not None:
                 assert len(dx) == len(dy)
 
-            self.max_level = len(dx)
+            self.nlev = len(dx)
             self.dx = dx
             self.dy = dy if dy is not None else dx
             self.nx = nx
             self.ny = ny
         else:
-            self.max_level = 1
+            self.nlev = 1
             self.dx = [dx]
             self.dy = [dy] if dy is not None else [dx]
             self.nx = [nx]
@@ -42,12 +43,11 @@ class NestedGrids(object):
 
         self._setup_grid()
 
-
     def _setup_grid(self):
         self.x0, self.y0 = self.proj.transform_point(
                 self.ref_lon, self.ref_lat, ccrs.Geodetic())
 
-        for ilev in range(self.max_level):
+        for ilev in range(self.nlev):
             self.level.append(
                 GridLevel(
                     self.x0,
@@ -59,50 +59,65 @@ class NestedGrids(object):
                 )
             )
 
-        if self.max_level==1:
+        if self.nlev==1:
             self.x = self.level[0].x
             self.y = self.level[0].y
             self.x_destag = self.level[0].x_destag
             self.y_destag = self.level[0].y_destag
 
+    def latlon(self,level=0,stagger=None):
+        assert level < self.nlev
+        if stagger is None and hasattr(self,'lat'):
+            return self.lat[level], self.lon[level]
+        elif stagger=='U' and hasattr(self,'lat_u'):
+            return self.lat_u[level], self.lon_u[level]
+        elif stagger=='V' and hasattr(self,'lat_v'):
+            return self.lat_v[level], self.lon_v[level]
+        else:
+            lat, lon = self.calc_lat_lon(stagger=stagger)
+            return lat[0], lon[0]
 
     def calc_lat_lon(self,stagger=None):
         """Calculate latitude and longitude at cell centers or u/v
         staggered locations (i.e., staggered in x/y)
         """
-        # return if already calcualted
-        if stagger is None and hasattr(self,'lat'):
-            return self.lat, self.lon
-        elif stagger=='U' and hasattr(self,'lat_u'):
-            return self.lat_u, self.lon_u
-        elif stagger=='V' and hasattr(self,'lat_v'):
-            return self.lat_v, self.lon_v
+        lat_levels = []
+        lon_levels = []
+        for ilev in range(self.nlev):
+            if stagger=='U':
+                print(f'Calculating lat-lon staggered in x (lev={ilev})')
+                xx,yy = np.meshgrid(self.level[ilev].x,
+                                    self.level[ilev].y_destag)
+            elif stagger=='V':
+                print(f'Calculating lat-lon staggered in y (lev={ilev})')
+                xx,yy = np.meshgrid(self.level[ilev].x_destag,
+                                    self.level[ilev].y)
+            else:
+                print(f'Calculating unstaggered lat-lon (lev={ilev})')
+                xx,yy = np.meshgrid(self.level[ilev].x_destag,
+                                    self.level[ilev].y_destag)
 
-        if stagger=='U':
-            print('Calculating lat-lon staggered in x')
-            xx,yy = np.meshgrid(self.x, self.y_destag)
-        elif stagger=='V':
-            print('Calculating lat-lon staggered in y')
-            xx,yy = np.meshgrid(self.x_destag, self.y)
-        else:
-            print('Calculating unstaggered lat-lon')
-            xx,yy = np.meshgrid(self.x_destag, self.y_destag)
+            transformer = pyproj.Transformer.from_proj(
+                self.proj,
+                "EPSG:4326",  # WGS84 geographic coordinates (equivalent to ccrs.Geodetic())
+                always_xy=True
+            )
+            lon, lat = transformer.transform(xx, yy)
 
-        lonlat = ccrs.Geodetic().transform_points(self.proj, xx.ravel(), yy.ravel())
-        lon = lonlat[:,0].reshape(xx.shape)
-        lat = lonlat[:,1].reshape(xx.shape)
+            lat_levels.append(lat)
+            lon_levels.append(lon)
 
         if stagger is None:
-            self.lat = lat
-            self.lon = lon
+            self.lat = lat_levels
+            self.lon = lon_levels
         elif stagger =='U':
-            self.lat_u = lat
-            self.lon_u = lon
+            self.lat_u = lat_levels
+            self.lon_u = lon_levels
         elif stagger =='V':
-            self.lat_v = lat
-            self.lon_v = lon
+            self.lat_v = lat_levels
+            self.lon_v = lon_levels
+        return lat_levels, lon_levels
 
-        return lat,lon
 
 
 class LambertConformalGrid(NestedGrids):
@@ -159,7 +174,6 @@ class LambertConformalGrid(NestedGrids):
             ),
         )
         super().__init__(proj,dx,dy,nx,ny)
-
 
     def calc_msf(self,lat):
         """From WRF WPS process_tile_module.F"""
