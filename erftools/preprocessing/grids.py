@@ -7,9 +7,14 @@ class GridLevel(object):
     """Simple data class containing 1-D staggered and destaggered grid
     coordinates to simplify access
     """
-    def __init__(self, x0, y0, dx, dy, nx, ny):
-        xlo = x0 - nx/2 * dx
-        ylo = y0 - ny/2 * dy
+    def __init__(self, dx, dy, nx, ny, center=None, ll_corner=None):
+        assert (center is not None) or (ll_corner is not None)
+        if center:
+            x0, y0 = center
+            xlo = x0 - nx/2 * dx
+            ylo = y0 - ny/2 * dy
+        else:
+            xlo, ylo = ll_corner
         self.x = np.arange(nx+1) * dx + xlo
         self.y = np.arange(ny+1) * dy + ylo
         self.x_destag = (np.arange(nx)+0.5) * dx + xlo
@@ -20,7 +25,7 @@ class NestedGrids(object):
     """Container for nested grids with projected coordinates with the
     same map projection
     """
-    def __init__(self, projection, dx, dy, nx, ny):
+    def __init__(self, projection, dx, dy, nx, ny, ll_ij=None, ll_xy=None):
         self.proj = projection
         self.level = []
 
@@ -34,12 +39,16 @@ class NestedGrids(object):
             self.dy = dy if dy is not None else dx
             self.nx = nx
             self.ny = ny
+            self.ll_ij = ll_ij
+            self.ll_xy = ll_xy
         else:
             self.nlev = 1
             self.dx = [dx]
             self.dy = [dy] if dy is not None else [dx]
             self.nx = [nx]
             self.ny = [ny]
+            self.ll_ij = None
+            self.ll_xy = None
 
         self._setup_grid()
 
@@ -47,15 +56,36 @@ class NestedGrids(object):
         self.x0, self.y0 = self.proj.transform_point(
                 self.ref_lon, self.ref_lat, ccrs.Geodetic())
 
+        concentric = (self.ll_ij is None) and (self.ll_xy is None)
+        if not concentric:
+            if self.ll_xy:
+                assert len(self.ll_xy) >= self.nlev-1
+                assert all([len(xy)==2 for xy in self.ll_xy])
+            elif self.ll_ij:
+                assert len(self.ll_ij) >= self.nlev-1
+                assert all([len(ij)==2 for ij in self.ll_ij])
+
+
         for ilev in range(self.nlev):
+            if (ilev == 0) or concentric:
+                anchor_pt = {'center': (self.x0, self.y0)}
+            else:
+                if self.ll_xy:
+                    xll = self.ll_xy[ilev-1][0]
+                    yll = self.ll_xy[ilev-1][0]
+                elif self.ll_ij:
+                    ioff,joff = self.ll_ij[ilev-1]
+                    xll = self.level[ilev-1].x[0] + ioff * self.dx[ilev-1]
+                    yll = self.level[ilev-1].y[0] + joff * self.dy[ilev-1]
+                anchor_pt = {'ll_corner':(xll, yll)}
+
             self.level.append(
                 GridLevel(
-                    self.x0,
-                    self.y0,
                     self.dx[ilev],
                     self.dy[ilev],
                     self.nx[ilev],
                     self.ny[ilev],
+                    **anchor_pt
                 )
             )
 
@@ -161,9 +191,15 @@ class LambertConformalGrid(NestedGrids):
                  stand_lon=None,
                  dx=None, dy=None,
                  nx=None, ny=None,
+                 ll_ij=None, ll_xy=None,
                  earth_radius=6370000.):
         """Initialize projection on a spherical datum with grid centered
         at (ref_lat, ref_lon).
+
+        To specify nested domains, dx, dy, nx, and ny should be
+        specified as lists with one value per domain level. In addition,
+        either ll_ij or ll_xy are needed if the nests are not
+        concentric.
 
         Parameters
         ----------
@@ -173,10 +209,16 @@ class LambertConformalGrid(NestedGrids):
             Standard parallel(s) at which the map scale is unity
         stand_lon: float, optional
             Central meridian
-        dx, dy : float
+        dx, dy : float or array-like
             Grid spacing in west-east, south-north directions
-        nx, ny : int
+        nx, ny : int or array-like
             Number of cells in the west-east, south-north directions
+        ll_ij : list of pairs, optional
+            Parent indices of the lower-left corner of each nested grid
+            level; this takes precedence over ll_xy
+        ll_xy : list of pairs, optional
+            Coordinates of the lower-left corner of each nested grid
+            level; may be specified instead of ll_ij
         earth_radius: float
             Radius of the earth approximated as a sphere
         """
@@ -204,7 +246,9 @@ class LambertConformalGrid(NestedGrids):
                 semiminor_axis=earth_radius,
             ),
         )
-        super().__init__(proj,dx,dy,nx,ny)
+        super().__init__(proj,
+                         dx,dy,nx,ny,
+                         ll_ij, ll_xy)
 
     def calc_msf(self,lat):
         """From WRF WPS process_tile_module.F"""
