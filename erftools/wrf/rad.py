@@ -96,7 +96,7 @@ def interp_ozone(inp, latitude, dataset='CAM', verbose=False):
     if verbose:
         print('Interpolating to',date)
 
-    heights = get_zcc(inp)
+    heights = get_zcc(inp,verbose=verbose)
     if verbose:
         print('Model heights:',heights)
 
@@ -128,6 +128,8 @@ def generate_ozone_profile(inputfile, latitude, dataset):
     o3vmr = interp_ozone(inp, latitude, dataset, verbose=True)
     erfstr = str(o3vmr).lstrip('[').rstrip(']')
     print('erf.o3vmr = ', erfstr)
+
+
 
 '''
 For verifying interpolator behavior

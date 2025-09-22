@@ -45,7 +45,7 @@ def get_w_from_omega(omega_cc, rho_cc, stag_dims=None):
     return da
 
 
-def get_zcc(inp) -> np.array:
+def get_zcc(inp, verbose=False) -> np.array:
     """Automatically get modeled heights at cell centers, which is exact
     for const dz or stretched grids and approximate for general,
     variable dz grids over terrain.
@@ -55,15 +55,21 @@ def get_zcc(inp) -> np.array:
     if not isinstance(inp, ERFInputs):
         inp = ERFInputs(inp)
     if len(inp.erf.terrain_z_levels) > 0:
+        if verbose:
+            print('Cell centers from input terrain_z_levels')
         zstag = np.array(inp.erf.terrain_z_levels)
         zcc = 0.5 * (zstag[1:] + zstag[:-1])
     elif inp.erf.grid_stretching_ratio > 1:
+        if verbose:
+            print('Cell centers from grid_stretching_ratio and initial_dz')
         s = inp.erf.grid_stretching_ratio
         dz0 = inp.erf.initial_dz
         nz = inp.amr.n_cell[2]
         zstag = dz0 * (s**np.arange(nz+1) - 1) / (s - 1) # partial sum
         zcc = 0.5 * (zstag[1:] + zstag[:-1])
     else:
+        if verbose:
+            print('Cell centers from geometry definition with constant dz')
         nz = inp.amr.n_cell[2]
         const_dz = (inp.geometry.prob_hi[2] - inp.geometry.prob_lo[2]) / nz
         zcc = inp.geometry.prob_lo[2] + np.arange(0.5, nz) * const_dz
