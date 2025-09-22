@@ -118,6 +118,37 @@ class NestedGrids(object):
             self.lon_v = lon_levels
         return lat_levels, lon_levels
 
+    def find_ij_from_latlon(self,lat,lon,level=None,stagger=None):
+        """Find i,j indices (corresponding to x,y) for given lat,lon
+
+        All levels are searched, from finest to coarsest, if `level` is
+        not specified.
+        """
+        levels = np.arange(self.nlev) if level is None else [level]
+        for ilev in levels[::-1]:
+            if stagger=='U':
+                x1 = self.level[ilev].x
+                y1 = self.level[ilev].y_destag
+            elif stagger=='V':
+                x1 = self.level[ilev].x_destag
+                y1 = self.level[ilev].y
+            else:
+                x1 = self.level[ilev].x_destag
+                y1 = self.level[ilev].y_destag
+
+            transformer = pyproj.Transformer.from_proj(
+                "EPSG:4326",  # WGS84 geographic coordinates (equivalent to ccrs.Geodetic())
+                self.proj,
+                always_xy=True
+            )
+            x, y = transformer.transform(lon, lat)
+
+            if ((x >= x1[0]) and (x <= x1[-1]) and
+                (y >= y1[0]) and (y <= y1[-1])
+            ):
+                i = int((x - x1[0]) / self.dx[ilev])
+                j = int((y - y1[0]) / self.dy[ilev])
+                return ilev, i, j
 
 
 class LambertConformalGrid(NestedGrids):
