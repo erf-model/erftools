@@ -2,45 +2,81 @@ import numpy as np
 import cartopy.crs as ccrs
 
 
+class GridLevel(object):
+    """Simple data class containing 1-D staggered and destaggered grid
+    coordinates to simplify access
+    """
+    def __init__(self, x0, y0, dx, dy, nx, ny):
+        xlo = x0 - nx/2 * dx
+        ylo = y0 - ny/2 * dy
+        self.x = np.arange(nx+1) * dx + xlo
+        self.y = np.arange(ny+1) * dy + ylo
+        self.x_destag = (np.arange(nx)+0.5) * dx + xlo
+        self.y_destag = (np.arange(ny)+0.5) * dy + ylo
+
+
 class NestedGrids(object):
     """Container for nested grids with projected coordinates with the
     same map projection
     """
-    def __init__(self, proj, dx, dy, nx, ny):
-        self.proj = proj
-        self.dx = dx
-        self.dy = dy
-        self.nx = nx
-        self.ny = ny
-        if self.dx and self.nx and self.ny:
-            self.setup_grid()
+    def __init__(self, projection, dx, dy, nx, ny):
+        self.proj = projection
+        self.level = []
 
-    def setup_grid(self):
-        assert self.dx is not None
-        if self.dy is None:
-            self.dy = self.dx
-        assert (self.nx is not None) and (self.ny is not None)
+        if hasattr(dx, '__iter__'):
+            assert len(dx) == len(nx) == len(ny)
+            if dy is not None:
+                assert len(dx) == len(dy)
 
+            self.max_level = len(dx)
+            self.dx = dx
+            self.dy = dy if dy is not None else dx
+            self.nx = nx
+            self.ny = ny
+        else:
+            self.max_level = 1
+            self.dx = [dx]
+            self.dy = [dy] if dy is not None else [dx]
+            self.nx = [nx]
+            self.ny = [ny]
+
+        self._setup_grid()
+
+
+    def _setup_grid(self):
         self.x0, self.y0 = self.proj.transform_point(
                 self.ref_lon, self.ref_lat, ccrs.Geodetic())
 
-        xlo = self.x0 - (self.nx)/2*self.dx
-        ylo = self.y0 - (self.ny)/2*self.dy
-        self.x = np.arange(self.nx+1)*self.dx + xlo
-        self.y = np.arange(self.ny+1)*self.dy + ylo
-        self.x_destag = (np.arange(self.nx)+0.5)*self.dx + xlo
-        self.y_destag = (np.arange(self.ny)+0.5)*self.dy + ylo
+        for ilev in range(self.max_level):
+            self.level.append(
+                GridLevel(
+                    self.x0,
+                    self.y0,
+                    self.dx[ilev],
+                    self.dy[ilev],
+                    self.nx[ilev],
+                    self.ny[ilev],
+                )
+            )
+
+        if self.max_level==1:
+            self.x = self.level[0].x
+            self.y = self.level[0].y
+            self.x_destag = self.level[0].x_destag
+            self.y_destag = self.level[0].y_destag
+
 
     def calc_lat_lon(self,stagger=None):
+        """Calculate latitude and longitude at cell centers or u/v
+        staggered locations (i.e., staggered in x/y)
+        """
+        # return if already calcualted
         if stagger is None and hasattr(self,'lat'):
             return self.lat, self.lon
         elif stagger=='U' and hasattr(self,'lat_u'):
             return self.lat_u, self.lon_u
         elif stagger=='V' and hasattr(self,'lat_v'):
             return self.lat_v, self.lon_v
-
-        if not hasattr(self,'x'):
-            self.setup_grid()
 
         if stagger=='U':
             print('Calculating lat-lon staggered in x')
@@ -51,6 +87,7 @@ class NestedGrids(object):
         else:
             print('Calculating unstaggered lat-lon')
             xx,yy = np.meshgrid(self.x_destag, self.y_destag)
+
         lonlat = ccrs.Geodetic().transform_points(self.proj, xx.ravel(), yy.ravel())
         lon = lonlat[:,0].reshape(xx.shape)
         lat = lonlat[:,1].reshape(xx.shape)
@@ -64,6 +101,7 @@ class NestedGrids(object):
         elif stagger =='V':
             self.lat_v = lat
             self.lon_v = lon
+
         return lat,lon
 
 
@@ -98,6 +136,7 @@ class LambertConformalGrid(NestedGrids):
         """
         self.ref_lat = ref_lat
         self.ref_lon = ref_lon
+
         if (truelat2 is None) or (truelat2==truelat1):
             truelat2 = None
             standard_parallels = [truelat1]
@@ -105,8 +144,10 @@ class LambertConformalGrid(NestedGrids):
             standard_parallels = [truelat1,truelat2]
         self.truelat1 = truelat1
         self.truelat2 = truelat2
+
         if stand_lon is None:
             stand_lon = ref_lon
+
         proj = ccrs.LambertConformal(
             central_longitude=stand_lon,
             central_latitude=ref_lat,
@@ -119,11 +160,13 @@ class LambertConformalGrid(NestedGrids):
         )
         super().__init__(proj,dx,dy,nx,ny)
 
+
     def calc_msf(self,lat):
         """From WRF WPS process_tile_module.F"""
         if self.truelat2 is None:
             colat0 = np.radians(90.0 - self.truelat1)
             colat  = np.radians(90.0 - lat)
+
             return np.sin(colat0)/np.sin(colat) \
                     * (np.tan(colat/2.0)/np.tan(colat0/2.0))**np.cos(colat0)
         else:
@@ -132,5 +175,6 @@ class LambertConformalGrid(NestedGrids):
             n = (np.log(np.sin(colat1))     - np.log(np.sin(colat2))) \
               / (np.log(np.tan(colat1/2.0)) - np.log(np.tan(colat2/2.0)))
             colat  = np.radians(90.0 - lat)
+
             return np.sin(colat2)/np.sin(colat) \
                     * (np.tan(colat/2.0)/np.tan(colat2/2.0))**n
