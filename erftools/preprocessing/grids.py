@@ -1,5 +1,7 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
+import cartopy.feature as cfeature
 import pyproj
 
 
@@ -180,6 +182,39 @@ class NestedGrids(object):
                 j = int((y - y1[0]) / self.dy[ilev])
                 return ilev, i, j
 
+    def plot_grids(self,projection=None,fig=None,ax=None,**kwargs):
+        if ax is None:
+            if projection is None:
+                projection = self.proj
+            fig,ax = plt.subplots(subplot_kw=dict(projection=projection))
+
+        # plot map features
+        ax.coastlines()
+        ax.add_feature(cfeature.BORDERS, linestyle='-')
+        ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False)
+
+        # plot all domain boundaries
+        for ilev, lev in enumerate(self.level):
+            label = f'level {ilev}'
+            plot_boundaries(lev.x, lev.y, self.proj, label=label, **kwargs)
+
+        # default plot extents
+        xmin = self.level[0].x[0]
+        xmax = self.level[0].x[-1]
+        ymin = self.level[0].y[0]
+        ymax = self.level[0].y[-1]
+        Lx = xmax - xmin
+        Ly = ymax - ymin
+        ax.set_extent([xmin - 0.5*Lx,
+                       xmax + 0.5*Lx,
+                       ymin - 0.5*Ly,
+                       ymax + 0.5*Ly],
+                      crs=self.proj)
+
+        ax.legend(loc='best', frameon=False)
+
+        return fig, ax
+
 
 class LambertConformalGrid(NestedGrids):
     """Given WRF projection parameters, setup a projection and calculate
@@ -267,3 +302,27 @@ class LambertConformalGrid(NestedGrids):
 
             return np.sin(colat2)/np.sin(colat) \
                     * (np.tan(colat/2.0)/np.tan(colat2/2.0))**n
+
+
+def plot_boundaries(x,y, proj, label='', ax=None, **kwargs):
+    if ax is None:
+        ax = plt.gca()
+
+    color = None # default cycle
+    if 'color' in kwargs.keys():
+        color = kwargs.pop('color')
+    elif 'c' in kwargs.keys():
+        color = kwargs.pop('c')
+
+    line, = ax.plot(x, y[0]*np.ones_like(x),
+            color=color,
+            transform=proj, label=label, **kwargs)
+    ax.plot(x, y[-1]*np.ones_like(x),
+            color=line.get_color(),
+            transform=proj, **kwargs)
+    ax.plot(x[0]*np.ones_like(y), y,
+            color=line.get_color(),
+            transform=proj, **kwargs)
+    ax.plot(x[-1]*np.ones_like(y), y,
+            color=line.get_color(),
+            transform=proj, **kwargs)
