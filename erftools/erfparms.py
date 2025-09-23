@@ -87,6 +87,7 @@ class GeometryParms:
 
 
 dycore_adv_schemes = [
+    # from WRF
     'Centered_2nd',
     'Upwind_3rd',
     'Blended_3rd4th',
@@ -94,15 +95,18 @@ dycore_adv_schemes = [
     'Upwind_5th',
     'Blended_5th6th',
     'Centered_6th',
+    # WENO-JS
+    'WENO3',
+    'WENO5',
+    'WENO7'
+    # WENO-Z
+    'WENOZ3',
+    'WENOZ5',
+    'WENOZ7'
 ]
 extra_scalar_adv_schemes = [
-    'WENO3',
-    'WENOZ3',
+    'Upwind_3rd_SL' # slope-limited
     'WENOMZQ3',
-    'WENO5',
-    'WENOZ5',
-    'WENO7'
-    'WENOZ7'
 ]
 
 # corresponding to ERF InitType
