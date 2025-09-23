@@ -133,7 +133,7 @@ class ERFParms:
     """erf.* parameters"""
 
     # Governing Equations
-    anelastic: bool = False  # solv anelastic eqns instead of compressible
+    anelastic: Union[int,List[int]] = field(default_factory=list)  # solve anelastic eqns instead of compressible
     use_fft: bool = False  # use FFT rather than multigrid to solve Poisson eqns
     mg_v: int = 0  # multigrid solver verbosiy when solving Poisson
 
@@ -298,9 +298,12 @@ class ERFParms:
     land_surface_model: str = 'None'
 
     def __post_init__(self):
-        if self.anelastic:
-            assert self.use_fft
-            assert self.project_initial_velocity
+        if isinstance(self.anelastic, int):
+            self.anelastic = [self.anelastic]
+        if len(self.anelastic) > 0:
+            if not self.use_fft:
+                warnings.warn('erf.use_fft = true is recommended for anelastic')
+            self.project_initial_velocity = True
             if self.substepping_type == 'DEFAULT':
                 self.substepping_type = 'none'
         else:
