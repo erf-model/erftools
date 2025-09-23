@@ -72,9 +72,10 @@ class NestedGrids(object):
             if (ilev == 0) or concentric:
                 anchor_pt = {'center': (self.x0, self.y0)}
             else:
+                # note: the lower-left lists are have length nlev-1
                 if self.ll_xy:
-                    xll = self.ll_xy[ilev-1][0]
-                    yll = self.ll_xy[ilev-1][0]
+                    xll = self.level[0].x[0] + self.ll_xy[ilev-1][0]
+                    yll = self.level[0].y[0] + self.ll_xy[ilev-1][1]
                 elif self.ll_ij:
                     ioff,joff = self.ll_ij[ilev-1]
                     xll = self.level[ilev-1].x[0] + ioff * self.dx[ilev-1]
@@ -253,7 +254,8 @@ class LambertConformalGrid(NestedGrids):
             level; this takes precedence over ll_xy
         ll_xy : list of pairs, optional
             Coordinates of the lower-left corner of each nested grid
-            level; may be specified instead of ll_ij
+            level, relative to the lower-left corner of the level-0
+            grid; may be specified instead of ll_ij
         earth_radius: float
             Radius of the earth approximated as a sphere
         """
