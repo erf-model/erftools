@@ -187,7 +187,7 @@ class ERFParms:
     sampler_interval: int = -1
     sample_line_lo: List[float] = field(default_factory=list)
     sample_line_hi: List[float] = field(default_factory=list)
-    sample_line_dir: List[int] = field(default_factory=list)
+    sample_line_dir: Union[int,List[int]] = field(default_factory=list)
 
     # Advection Schemes
     dycore_horiz_adv_type: str = 'Upwind_3rd'
@@ -331,10 +331,16 @@ class ERFParms:
             assert len(self.sample_line_hi) == len(self.sample_line_lo)
             assert len(self.sample_line_lo) == 3*nlines, \
                     'Unexpected number of ijk values in sampling indices'
-            if len(self.sample_line_dir) > 0:
+            if isinstance(self.sample_line_dir, list):
                 assert len(self.sample_line_dir) == nlines
+            elif isinstance(self.sample_line_dir, int):
+                self.sample_line_dir = [self.sample_line_dir]
             else:
+                # default to vertical line samples
                 self.sample_line_dir = nlines*[2]
+            # convert to numeric
+            self.sample_line_lo = list(map(int, self.sample_line_lo))
+            self.sample_line_hi = list(map(int, self.sample_line_hi))
         assert len(self.sample_line_lo) == len(self.sample_line_hi)
 
         for vartype in ['dycore','dryscal','moistscal']:
