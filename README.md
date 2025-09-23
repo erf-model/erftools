@@ -66,7 +66,7 @@ fig, ax = now23.plot_grids()
 Grid geometry can be read from an ERF input file and plotting may be
 done from the command line as well.
 ```shell
-plot_projected_grids inputs --latlon0 35.85 -123.72 --truelat1 36.05 --standlon -65.0
+plotgrids inputs --latlon0 35.85 -123.72 --truelat1 36.05 --standlon -65.0
 ```
 
 

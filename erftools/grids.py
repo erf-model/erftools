@@ -359,7 +359,7 @@ def plot_boundaries(x,y, proj, label='', ax=None, **kwargs):
 @click.option('--standlon', required=False,
               type=click.FloatRange(-180,180),
               help='Standard longitude')
-def plot_projected_grids(inputfile, output, latlon0, truelat1, truelat2, standlon):
+def plotgrids(inputfile, output, latlon0, truelat1, truelat2, standlon):
     """Plot nested grids in with a specified map projection"""
     lat0,lon0 = latlon0
     if truelat2 is None:
