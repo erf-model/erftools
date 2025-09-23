@@ -342,25 +342,7 @@ def plot_boundaries(x,y, proj, label='', ax=None, **kwargs):
             transform=proj, **kwargs)
 
 
-@click.command()
-@click.argument('inputfile', type=click.Path(exists=True, readable=True))
-@click.option('--output','-o', type=click.Path(writable=True),
-              default='projected_grids.png',
-              help='Output image name, format determined by file extension')
-@click.option('--latlon0', nargs=2, required=True,
-              type=(click.FloatRange(-90,90), click.FloatRange(-180,180)),
-              help='Center latitude, longitude')
-@click.option('--truelat1', required=True,
-              type=click.FloatRange(-90,90),
-              help='Standard parallel')
-@click.option('--truelat2', required=False,
-              type=click.FloatRange(-90,90),
-              help='Second standard parallel (optional)')
-@click.option('--standlon', required=False,
-              type=click.FloatRange(-180,180),
-              help='Standard longitude')
-def plotgrids(inputfile, output, latlon0, truelat1, truelat2, standlon):
-    """Plot nested grids in with a specified map projection"""
+def _init_grid_from_cli(inputfile, latlon0, truelat1, truelat2, standlon):
     lat0,lon0 = latlon0
     if truelat2 is None:
         truelat2 = truelat1
@@ -414,5 +396,57 @@ def plotgrids(inputfile, output, latlon0, truelat1, truelat2, standlon):
         ll_xy=ll_xy
     )
 
+    return grids
+
+
+@click.command()
+@click.argument('inputfile', type=click.Path(exists=True, readable=True))
+@click.option('--latlon', nargs=2, required=True,
+              type=(click.FloatRange(-90,90), click.FloatRange(-180,180)),
+              help='Query point')
+@click.option('--latlon0', nargs=2, required=True,
+              type=(click.FloatRange(-90,90), click.FloatRange(-180,180)),
+              help='Center latitude, longitude')
+@click.option('--truelat1', required=True,
+              type=click.FloatRange(-90,90),
+              help='Standard parallel')
+@click.option('--truelat2', required=False,
+              type=click.FloatRange(-90,90),
+              help='Second standard parallel (optional)')
+@click.option('--standlon', required=False,
+              type=click.FloatRange(-180,180),
+              help='Standard longitude')
+def get_ij_near_latlon(inputfile, latlon, latlon0, truelat1, truelat2, standlon):
+    """Get indices nearest to input latitude,longitude on the finest
+    available grid, for the given grid projection
+
+    Prints out ilev, i, j, where ilev is the zero-based grid level
+    (ilev==0 is the coarsest grid level)
+    """
+    grids = _init_grid_from_cli(inputfile, latlon0, truelat1, truelat2, standlon)
+    ilev, i, j = grids.find_ij_from_latlon(*latlon)
+    print(ilev, i, j)
+
+
+@click.command()
+@click.argument('inputfile', type=click.Path(exists=True, readable=True))
+@click.option('--output','-o', type=click.Path(writable=True),
+              default='projected_grids.png',
+              help='Output image name, format determined by file extension')
+@click.option('--latlon0', nargs=2, required=True,
+              type=(click.FloatRange(-90,90), click.FloatRange(-180,180)),
+              help='Center latitude, longitude')
+@click.option('--truelat1', required=True,
+              type=click.FloatRange(-90,90),
+              help='Standard parallel')
+@click.option('--truelat2', required=False,
+              type=click.FloatRange(-90,90),
+              help='Second standard parallel (optional)')
+@click.option('--standlon', required=False,
+              type=click.FloatRange(-180,180),
+              help='Standard longitude')
+def plotgrids(inputfile, output, latlon0, truelat1, truelat2, standlon):
+    """Plot nested grids in with a specified map projection"""
+    grids = _init_grid_from_cli(inputfile, latlon0, truelat1, truelat2, standlon)
     fig,ax = grids.plot_grids()
     fig.savefig(output, bbox_inches='tight', dpi=150)

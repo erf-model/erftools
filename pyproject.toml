@@ -66,6 +66,7 @@ packages = ["erftools"]
 check_erf_input = "erftools.inputs:check_erf_input"
 wrf_namelist_to_erf = "erftools.wrf.inputdeck:wrf_namelist_to_erf"
 generate_ozone_profile = "erftools.wrf.rad:generate_ozone_profile"
+get_ij_near_latlon = "erftools.grids:get_ij_near_latlon"
 plotgrids = "erftools.grids:plotgrids"
 
 [project.urls]
