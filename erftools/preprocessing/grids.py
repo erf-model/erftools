@@ -3,6 +3,9 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import pyproj
+import click
+
+from erftools.inputs import ERFInputs
 
 
 class GridLevel(object):
@@ -199,6 +202,8 @@ class NestedGrids(object):
             label = f'level {ilev}'
             plot_boundaries(lev.x, lev.y, self.proj, label=label, **kwargs)
 
+        ax.plot(self.x0, self.y0, 'k.', transform=self.proj)
+
         # default plot extents
         xmin = self.level[0].x[0]
         xmax = self.level[0].x[-1]
@@ -333,3 +338,79 @@ def plot_boundaries(x,y, proj, label='', ax=None, **kwargs):
     ax.plot(x[-1]*np.ones_like(y), y,
             color=line.get_color(),
             transform=proj, **kwargs)
+
+
+@click.command()
+@click.argument('inputfile', type=click.Path(exists=True, readable=True))
+@click.option('--output','-o', type=click.Path(writable=True),
+              default='projected_grids.png',
+              help='Output image name, format determined by file extension')
+@click.option('--latlon0', nargs=2, required=True,
+              type=(click.FloatRange(-90,90), click.FloatRange(-180,180)),
+              help='Center latitude, longitude')
+@click.option('--truelat1', required=True,
+              type=click.FloatRange(-90,90),
+              help='Standard parallel')
+@click.option('--truelat2', required=False,
+              type=click.FloatRange(-90,90),
+              help='Second standard parallel (optional)')
+@click.option('--standlon', required=False,
+              type=click.FloatRange(-180,180),
+              help='Standard longitude')
+def plot_projected_grids(inputfile, output, latlon0, truelat1, truelat2, standlon):
+    """Plot nested grids in with a specified map projection"""
+    lat0,lon0 = latlon0
+    if truelat2 is None:
+        truelat2 = truelat1
+    if standlon is None:
+        standlon = lon0
+
+    # read computationl grid from input file
+    inp = ERFInputs(inputfile)
+    nx0,ny0 = inp.amr.n_cell[:2]
+    prob_lo = np.array(inp.geometry.prob_lo)
+    prob_hi = np.array(inp.geometry.prob_hi)
+    extent = prob_hi - prob_lo
+    dx0 = extent[0] / nx0
+    dy0 = extent[1] / ny0
+
+    # derive nest info
+    dxlist = [dx0]
+    dylist = [dy0]
+    nxlist = [nx0]
+    nylist = [ny0]
+    ll_xy = []
+    ref_ratio = inp.amr.ref_ratio_vect
+    for ilev in range(1,inp.amr.max_level+1):
+        for refgrid in inp.erf.refinement_indicators:
+            refine = inp.refine[refgrid]
+            if refine['max_level'] == ilev:
+                dxlist.append(dxlist[-1] / ref_ratio[0])
+                dylist.append(dylist[-1] / ref_ratio[1])
+
+                # note: outer domain lower-left corner is (0,0)
+                xll = refine['in_box_lo'][0]
+                yll = refine['in_box_lo'][1]
+                ll_xy.append((xll,yll))
+                nx_lev = int((refine['in_box_hi'][0] - xll) / dxlist[-1])
+                ny_lev = int((refine['in_box_hi'][1] - yll) / dylist[-1])
+                nxlist.append(nx_lev)
+                nylist.append(ny_lev)
+    assert len(ll_xy) == inp.amr.max_level, 'assumed only one grid per level'
+
+    # instantiate nested grids
+    grids = LambertConformalGrid(
+        ref_lat=lat0,
+        ref_lon=lon0,
+        truelat1=truelat1,
+        truelat2=truelat2,
+        stand_lon=standlon,
+        dx=dxlist,
+        dy=dylist,
+        nx=nxlist,
+        ny=nylist,
+        ll_xy=ll_xy
+    )
+
+    fig,ax = grids.plot_grids()
+    fig.savefig(output, bbox_inches='tight', dpi=150)

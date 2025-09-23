@@ -113,7 +113,7 @@ def interp_ozone(inp, latitude, dataset='CAM', verbose=False):
 
 
 @click.command()
-@click.argument('inputfile', type=click.Path(writable=True))
+@click.argument('inputfile', type=click.Path(exists=True, readable=True))
 @click.option('--latitude', type=click.FloatRange(-90,90),
               required=True)
 @click.option('--dataset', default='CAM',
