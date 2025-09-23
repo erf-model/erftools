@@ -21,6 +21,7 @@ from .rad import interp_ozone
 
 from ..constants import CONST_GRAV, p_0
 from ..inputs import ERFInputs
+from ..grids import LambertConformalGrid
 
 
 class WRFInputDeck(object):

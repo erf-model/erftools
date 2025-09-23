@@ -47,7 +47,7 @@ wrf_namelist_to_erf namelist.input inputs
 
 ### Plotting a Domain Configuration
 ```python
-from erftools.preprocessing import LambertConformalGrid
+from erftools.grids import LambertConformalGrid
 
 now23 = LambertConformalGrid(
     ref_lat=37.100163,
