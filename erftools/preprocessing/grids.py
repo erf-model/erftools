@@ -271,6 +271,10 @@ class LambertConformalGrid(NestedGrids):
         if stand_lon is None:
             stand_lon = ref_lon
 
+        cutoff = -30 # default for northern hemisphere
+        if self.ref_lat < 0:
+            cutoff = 30
+
         proj = ccrs.LambertConformal(
             central_longitude=stand_lon,
             central_latitude=ref_lat,
@@ -280,6 +284,7 @@ class LambertConformalGrid(NestedGrids):
                 semimajor_axis=earth_radius,
                 semiminor_axis=earth_radius,
             ),
+            cutoff=cutoff,
         )
         super().__init__(proj,
                          dx,dy,nx,ny,
