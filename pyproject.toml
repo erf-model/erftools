@@ -66,7 +66,7 @@ packages = ["erftools"]
 check_erf_input = "erftools.inputs:check_erf_input"
 wrf_namelist_to_erf = "erftools.wrf.inputdeck:wrf_namelist_to_erf"
 generate_ozone_profile = "erftools.wrf.rad:generate_ozone_profile"
-plot_projected_grids = "erftools.preprocessing.grids:plot_projected_grids"
+plotgrids = "erftools.grids:plotgrids"
 
 [project.urls]
 Homepage = "https://erf.readthedocs.io/en/latest/"
