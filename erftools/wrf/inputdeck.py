@@ -298,9 +298,9 @@ class WRFInputDeck(object):
         inp['erf.dryscal_horiz_adv_type'] = h_sca_adv_order
         inp['erf.dryscal_vert_adv_type']  = v_sca_adv_order
         if not all([adv_opt == 'WENO5' for adv_opt in self.dynamics.moist_adv_opt]):
-            self.log.warning(f'WRF moist_adv_opt = {self.dynamics.moist_adv_opt}'
-                             ' not available -- defaulting to 5th-order WENO for'
-                             ' erf.moistscal_*_adv_type')
+            self.log.info(f'WRF moist_adv_opt = {self.dynamics.moist_adv_opt}'
+                          ' not available -- defaulting to 5th-order WENO for'
+                          ' erf.moistscal_*_adv_type')
 
         inp['erf.pbl_type'] = self.physics.bl_pbl_physics
         for idom in range(max_dom):
@@ -355,14 +355,14 @@ class WRFInputDeck(object):
         if any([opt != 'None' for opt in self.physics.mp_physics]):
             moisture_model = self.physics.mp_physics[0]
             if len(set(self.physics.mp_physics)) > 1:
-                self.log.warning(f'Applying the {moisture_model} microphysics'
-                                 ' model on all levels')
+                self.log.info(f'Applying the {moisture_model} microphysics'
+                              ' model on all levels')
             inp['erf.moisture_model'] = moisture_model
 
         if any([opt != 'None' for opt in self.physics.ra_physics]):
             rad_model = self.physics.ra_physics[0]
             if len(set(self.physics.ra_physics)) > 1:
-                self.log.warning(f'Applying the {rad_model} radiation scheme on all levels')
+                self.log.info(f'Applying the {rad_model} radiation scheme on all levels')
             inp['erf.radiation_model'] = rad_model
 
             inp['erf.rad_freq_in_steps'] = self.physics.radt[0]
@@ -380,7 +380,7 @@ class WRFInputDeck(object):
         if any([opt != 'None' for opt in self.physics.surface_physics]):
             lsm_model = self.physics.surface_physics[0]
             if len(set(self.physics.surface_physics)) > 1:
-                self.log.warning(f'Applying the {lsm_model} surface scheme on all levels')
+                self.log.info(f'Applying the {lsm_model} surface scheme on all levels')
             if lsm_model == 'NoahMP':
                 #self.log.warning(f'&noah_mp was not parsed, additional options'
                 #                 ' need to be manually specified')
