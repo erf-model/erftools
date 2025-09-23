@@ -23,9 +23,13 @@ pip install -e .[all]
 
 ## Examples
 
+Some short snippets are provided below.
+Please see the notebooks folder for more detailed examples.
+
 ### Converting a WRF namelist into ERF inputs
 ```python
 from erftools.preprocessing import WRFInputDeck
+
 wrf = WRFInputDeck('namelist.input')
 wrf.write_inputfile('inputs')
 
@@ -37,22 +41,51 @@ wrf.process_initial_conditions('wrfinput_d01',
 ```
 
 The namelist conversion may also be accomplished from the command line:
-```bash
+```shell
 wrf_namelist_to_erf namelist.input inputs
 ```
+
+### Plotting a Domain Configuration
+```python
+from erftools.preprocessing import LambertConformalGrid
+
+now23 = LambertConformalGrid(
+    ref_lat=37.100163,
+    ref_lon=-122.49992,
+    truelat1=37.100163, # standard parallel
+    stand_lon=-122.49992, # standard longitude
+    dx=[6000, 2000],
+    dy=[6000, 2000],
+    nx=[243, 552], # WRF staggered dim - 1
+    ny=[243, 579],
+    ll_ij=[(30,27)], # parent grid index
+)
+fig, ax = now23.plot_grids()
+```
+
+Grid geometry can be read from an ERF input file and plotting may be
+done from the command line as well.
+```shell
+plot_projected_grids inputs --latlon0 35.85 -123.72 --truelat1 36.05 --standlon -65.0
+```
+
 
 ### Postprocessing data logs
 Data logs are output with the `erf.data_log` param and can include time
 histories of surface conditions and planar averaged profiles (e.g., for
 idealized LES simulations)
+
 ```python
 from erftools.postprocessing import DataLog
+
 log = DataLog(f'{simdir}/surf_hist.dat',
               f'{simdir}/mean_profiles.dat',
               f'{simdir}/flux_profiles.dat',
               f'{simdir}/sfs_profiles.dat')
+
 log.calc_stress()
 log.est_abl_height('max_theta_grad')
+
 print(log.ds) # data are stored in an xarray dataset
 ```
 
