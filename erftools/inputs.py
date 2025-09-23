@@ -583,6 +583,8 @@ erf.real_set_width = {self.erf.real_set_width}
 """)
                 else:
                     f.write('\n')
+                if self.erf.nc_low_file:
+                    f.write('erf.nc_low_file    = {self.erf.nc_low_file}')
             elif self.erf.init_type.lower() == 'metgrid':
                 f.write(f"""
 erf.init_type      = metgrid

@@ -260,6 +260,7 @@ class ERFParms:
     init_sounding_ideal: bool = False
     nc_init_file_0: Union[str,List[str]] = ''
     nc_bdy_file: str = ''
+    nc_low_file: str = ''
     project_initial_velocity: bool = False
     use_real_bcs: bool = False
     real_width: int = 5
