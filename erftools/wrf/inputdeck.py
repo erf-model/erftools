@@ -60,12 +60,17 @@ class WRFInputDeck(object):
         self.physics = Physics(self.nml['physics'])
         self.dynamics = Dynamics(self.nml['dynamics'])
         self.bdy_control = BoundaryControl(self.nml['bdy_control'])
+
         # calculate ERF equivalents
         self.set_defaults()
         self.generate_inputs()
 
+        # get attributes from wrfinput if available
         self.wrfinput = wrfinput
         self.get_map_info()
+
+        # create a NestedGrids instance if we have map info
+        self.create_grids()
 
         if tslist is not None:
             self.tslist = TSList(tslist)
@@ -420,6 +425,39 @@ class WRFInputDeck(object):
         self.moad_cen_lat = inp.attrs['MOAD_CEN_LAT'] # "mother of all domains"
         self.stand_lon = inp.attrs['STAND_LON']
         self.map_proj = inp.attrs['MAP_PROJ_CHAR']
+
+    def create_grids(self):
+        if self.cen_lat is None:
+            self.grids = None
+            return
+
+        assert self.map_proj == 'Lambert Conformal'
+        ndom = self.domains.max_dom
+        dxlist = self.domains.dx[:ndom]
+        dylist = self.domains.dy[:ndom]
+        iminlist = self.domains.s_we[:ndom]
+        jminlist = self.domains.s_sn[:ndom]
+        imaxlist = self.domains.e_we[:ndom]
+        jmaxlist = self.domains.e_sn[:ndom]
+        iparentlist = self.domains.i_parent_start[1:ndom]
+        jparentlist = self.domains.j_parent_start[1:ndom]
+        # note: WRF input start/end indices are staggered but
+        #       one-based; so nstag = i1 - i0 + 1; n = i1 - i0
+        nxlist = [i1 - i0 for (i0,i1) in zip(iminlist,imaxlist)]
+        nylist = [j1 - j0 for (j0,j1) in zip(jminlist,jmaxlist)]
+        ll_ij = [(i-1,j-1) for (i,j) in zip(iparentlist,jparentlist)]
+
+        self.grids = LambertConformalGrid(
+            ref_lat=self.cen_lat,
+            ref_lon=self.cen_lon,
+            truelat1=self.truelat1, # standard parallel
+            truelat2=self.truelat2, # standard parallel
+            stand_lon=self.stand_lon, # standard longitude
+            dx=dxlist,
+            dy=dylist,
+            nx=nxlist,
+            ny=nylist,
+            ll_ij=ll_ij)
 
     def process_initial_conditions(self,init_input=None,
                                    calc_geopotential_heights=False,
