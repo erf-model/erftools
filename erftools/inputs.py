@@ -48,6 +48,7 @@ def to_datetime(dt):
     elif isinstance(dt, list):
         assert len(dt) == 2, 'expected date string + time string'
         dt = ' '.join(dt)
+        dt = dt.strip('"')
     return parser.parse(dt)
 
 class ERFInputs(object):
