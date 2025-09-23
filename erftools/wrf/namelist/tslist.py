@@ -1,3 +1,5 @@
+import warnings
+
 name_len = 25
 
 class TSList(object):
@@ -30,6 +32,21 @@ class TSList(object):
             else:
                 self.lat.append(float(defs[1]))
                 self.lon.append(float(defs[2]))
+
+    def convert_latlon(self, grids):
+        allOK = True
+        for lat,lon in zip(self.lat, self.lon):
+            ilev, i, j = grids.find_ij_from_latlon(lat, lon)
+            print(f'mapping tslist ({lat:g},{lon:g}) --> ({i},{j}) on level {ilev}')
+            if ilev < 0:
+                allOK = False
+            else:
+                self.i.append(i)
+                self.j.append(j)
+        if allOK:
+            self.have_ij = True
+        else:
+            warnings.warn('one or more virtual towers could not be mapped to i,j')
 
     def get_ijk_lists(self,nz):
         """Get indices for ERF line sampling"""

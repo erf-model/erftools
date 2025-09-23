@@ -185,6 +185,8 @@ class NestedGrids(object):
                 i = int((x - x1[0]) / self.dx[ilev])
                 j = int((y - y1[0]) / self.dy[ilev])
                 return ilev, i, j
+            else:
+                return -1, -1, -1
 
     def plot_grids(self,projection=None,fig=None,ax=None,**kwargs):
         if ax is None:

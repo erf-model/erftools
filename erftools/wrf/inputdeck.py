@@ -622,8 +622,10 @@ class WRFInputDeck(object):
                     os.path.split(write_albedo)[1]
 
     def to_erf(self):
+        # instantiate ERFInputs for writing
         inp = ERFInputs(**self.input_dict)
 
+        # additional settings
         if inp.erf.radiation_model != 'None':
             if self.cen_lat:
                 inp.erf.o3vmr = interp_ozone(inp, self.cen_lat)
@@ -632,12 +634,18 @@ class WRFInputDeck(object):
                                  'the entire column; need to set `cen_lat`, '
                                  'e.g. by providing a wrfinput file')
 
+        # setup sampling
         if self.tslist:
+            if not self.tslist.have_ij and self.grids is not None:
+                # need to map lat,lon to i,j
+                self.tslist.convert_latlon(self.grids)
+
             if self.tslist.have_ij:
                 nz = self.input_dict['amr.n_cell'][2]
                 lo_ijk, hi_ijk = self.tslist.get_ijk_lists(nz)
                 inp.erf.sample_line_lo = lo_ijk
                 inp.erf.sample_line_hi = hi_ijk
+                inp.erf.sample_line_dir = self.tslist.ntowers * [2]
             else:
                 self.log.info('A tslist was provided but lat,lon were not '
                               'converted to i,j')
