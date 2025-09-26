@@ -102,6 +102,9 @@ class NestedGrids(object):
             self.y_destag = self.level[0].y_destag
 
     def latlon(self,level=0,stagger=None):
+        """Helper function to return lat, lon at the requested level
+        with/without u or v staggering
+        """
         assert level < self.nlev
         if stagger is None and hasattr(self,'lat'):
             return self.lat[level], self.lon[level]
@@ -111,11 +114,14 @@ class NestedGrids(object):
             return self.lat_v[level], self.lon_v[level]
         else:
             lat, lon = self.calc_lat_lon(stagger=stagger)
-            return lat[0], lon[0]
+            return lat[level], lon[level]
 
     def calc_lat_lon(self,stagger=None):
         """Calculate latitude and longitude at cell centers or u/v
         staggered locations (i.e., staggered in x/y)
+
+        Note that this will initialize 2D grids, which may be large
+        depending on your problem.
         """
         lat_levels = []
         lon_levels = []
@@ -225,8 +231,8 @@ class NestedGrids(object):
 
 
 class LambertConformalGrid(NestedGrids):
-    """Given WRF projection parameters, setup a projection and calculate
-    map scale factors
+    """Given projection parameters, setup a map projection and
+    initialize the corresponding Cartesian grid
     """
     def __init__(self,
                  ref_lat, ref_lon,
