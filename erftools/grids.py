@@ -160,6 +160,21 @@ class NestedGrids(object):
             self.lon_v = lon_levels
         return lat_levels, lon_levels
 
+    def create_latlon_grid(self,level=0,stag_x=True,stag_y=True,indexing='xy'):
+        """Create a regular grid with projected coordinates in lat/lon
+        space. This returns a curvilinear 2-D grid.
+        """
+        x1 = self.level[level].x if stag_x else self.level[level].x_destag
+        y1 = self.level[level].y if stag_y else self.level[level].y_destag
+        xx,yy = np.meshgrid(x1,y1,indexing=indexing)
+        transformer = pyproj.Transformer.from_proj(
+            self.proj,
+            "EPSG:4326",  # WGS84 geographic coordinates (equivalent to ccrs.Geodetic())
+            always_xy=True
+        )
+        lon2d, lat2d = transformer.transform(xx, yy)
+        return lat2d, lon2d
+
     def find_ij_from_latlon(self,lat,lon,level=None,stagger=None):
         """Find i,j indices (corresponding to x,y) for given lat,lon
 
