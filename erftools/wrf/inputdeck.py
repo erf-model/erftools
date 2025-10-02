@@ -587,6 +587,7 @@ class WRFInputDeck(object):
             z0 = z0.transpose('west_east','south_north')
             interpfun = RegularGridInterpolator(
                     (west_east,south_north), z0.values,
+                    method='nearest',
                     bounds_error=False,
                     fill_value=None)
             z0_nodes = interpfun((xg,yg))
