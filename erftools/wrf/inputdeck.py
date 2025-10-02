@@ -670,8 +670,8 @@ def write_ascii_table(fpath, xyz, names=None):
         df.to_csv(fpath, index=False)
     else:
         header = ''
-        if names is not None:
-            header = ' '.join(names)
+        #if names is not None:
+        #    header = ' '.join(names)
         np.savetxt(fpath, xyz, header=header, fmt='%.8g')
 
 
