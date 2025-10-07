@@ -550,6 +550,10 @@ erf.abl_pressure_grad = {list_to_str(self.erf.abl_pressure_grad)}
             if have_rayleigh:
                 f.write(f'erf.rayleigh_zdamp    = {self.erf.rayleigh_zdamp}\n')
                 f.write(f'erf.rayleigh_dampcoef = {self.erf.rayleigh_dampcoef}\n')
+            if self.erf.w_damping:
+                f.write(f'erf.w_damping         = true\n')
+            if self.erf.beta_s != 0.1:
+                f.write(f'erf.beta_s            = {self.erf.beta_s}\n')
 
             if self.erf.nudging_from_input_sounding:
                 f.write(f"""

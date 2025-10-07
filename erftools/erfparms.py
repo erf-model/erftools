@@ -255,6 +255,10 @@ class ERFParms:
     rayleigh_dampcoef: float = 0.2
     rayleigh_zdamp: float = 500.
 
+    w_damping: bool = False
+
+    beta_s: float = 0.1
+
     # Initialization
     init_type: str = 'None'
     init_sounding_ideal: bool = False

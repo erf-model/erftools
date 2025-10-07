@@ -322,10 +322,13 @@ class Dynamics(WRFNamelist):
 
     def parse_damping(self):
         self.damp_opt = damp_opt_mapping[self.getvar('damp_opt')]
-        self.w_damping = bool(self.getvar('w_damping', default=0))
         ndamp = len(self.damp_opt)
         self.zdamp = self.getarrayvar('zdamp', default=ndamp*[5000.])
         self.dampcoef = self.getarrayvar('dampcoef', default=ndamp*[0.2])
+        self.w_damping = bool(self.getvar('w_damping', default=0))
+        self.epssm = self.getarrayvar('epssm', default=ndamp*[0.1])
+        assert all([beta_s==self.epssm[0] for beta_s in self.epssm]), \
+                'Different off-centering coefficients not handled'
 
 
 class BoundaryControl(WRFNamelist):

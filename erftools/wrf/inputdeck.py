@@ -401,6 +401,8 @@ class WRFInputDeck(object):
                 inp['erf.rayleigh_zdamp'] = self.dynamics.zdamp[0]
             else:
                 self.log.warning(f'Damping option {self.dynamics.damp_opt} not supported')
+            inp['erf.w_damping'] = self.dynamics.w_damping
+            inp['erf.beta_s'] = self.dynamics.epssm[0]
 
         self.input_dict = inp
 
