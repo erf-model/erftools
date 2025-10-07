@@ -365,9 +365,18 @@ class WRFInputDeck(object):
                 self.log.info(f'Applying the {rad_model} radiation scheme on all levels')
             inp['erf.radiation_model'] = rad_model
 
-            inp['erf.rad_freq_in_steps'] = self.physics.radt[0]
-            if inp['erf.rad_freq_in_steps'] < 0:
-                # rule of thumb: rad freq is "1 min per km of dx"
+            if not all([interval==self.physics.radt[0]
+                        for interval in self.physics.radt]):
+                self.log.warning('Different radiation call intervals not handled, '
+                                f'using {self.physics.radt[0]} min')
+
+            assert self.physics.radt[0] != 0
+            if self.physics.radt[0] > 0:
+                # convert from minutes to steps
+                inp['erf.rad_freq_in_steps'] = int(self.physics.radt[0]*60 /
+                                                   dt[0])
+            else:
+                # calculate with rule of thumb: rad freq is "1 min per km of dx"
                 dx_km = self.domains.dx[0] / 1000.
                 radt = dx_km * 60. # [s]
                 rad_freq = int(radt / dt[0])
