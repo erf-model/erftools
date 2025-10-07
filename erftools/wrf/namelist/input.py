@@ -258,8 +258,6 @@ class Physics(WRFNamelist):
         self.ra_physics = [ra_physics_mapping.get(idx,'UNKNOWN') for idx in ra_lw_idx_list]
 
         self.radt = self.getarrayvar('radt', default=-1)
-        assert all([t==self.radt[0] for t in self.radt]), \
-                'Different radiation call intervals not handled'
 
         lsm_idx_list = self.getarrayvar('sf_surface_physics')
         self.surface_physics = [surface_physics_mapping.get(idx,'UNKNOWN') for idx in lsm_idx_list]
@@ -327,8 +325,6 @@ class Dynamics(WRFNamelist):
         self.dampcoef = self.getarrayvar('dampcoef', default=ndamp*[0.2])
         self.w_damping = bool(self.getvar('w_damping', default=0))
         self.epssm = self.getarrayvar('epssm', default=ndamp*[0.1])
-        assert all([beta_s==self.epssm[0] for beta_s in self.epssm]), \
-                'Different off-centering coefficients not handled'
 
 
 class BoundaryControl(WRFNamelist):
