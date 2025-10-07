@@ -3,7 +3,7 @@
 pbl_mapping = {
     0:  'None',
     1:  'YSU', # YSU scheme
-#   2:  'MYJ', # Mellor-Yamada-Janjic TKE scheme
+    2:  'MYJ', # Mellor-Yamada-Janjic TKE scheme
 #   3:  'GFS', # Hybrid EDMF GFS scheme
 #   4:  'QNSE', # Eddy-diffusivity Mass Flux, Quasi-Normal Scale Elimination PBL
     5:  'MYNN', # MYNN 2.5/2.6/3.0 level TKE scheme
