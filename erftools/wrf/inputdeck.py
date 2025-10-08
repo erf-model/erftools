@@ -219,6 +219,7 @@ class WRFInputDeck(object):
             imax = self.domains.e_we
             jmax = self.domains.e_sn
             ref_ratio_vect = []
+            in_box_lo = np.array([0.0, 0.0])  # parent domain lower-left corner
             for idom in range(1,max_dom):
                 grid_ratio = self.domains.parent_grid_ratio[idom]
                 ref_ratio_vect += [grid_ratio, grid_ratio, 1]
@@ -227,13 +228,13 @@ class WRFInputDeck(object):
                 child_dx   = np.array([  dx[idom  ]  ,   dy[idom  ]  ], dtype=float)
                 parent_ext = np.array([imax[idom-1]-1, jmax[idom-1]-1]) * parent_dx
                 child_ext  = np.array([imax[idom  ]-1, jmax[idom  ]-1]) * child_dx
+                assert (child_ext[0] <= parent_ext[0])
+                assert (child_ext[1] <= parent_ext[1])
                 lo_idx = np.array([
                     self.domains.i_parent_start[idom] - 1,
                     self.domains.j_parent_start[idom] - 1])
-                in_box_lo = lo_idx * parent_dx
+                in_box_lo = in_box_lo + lo_idx * parent_dx
                 in_box_hi = in_box_lo + child_ext
-                assert (in_box_hi[0] <= parent_ext[0])
-                assert (in_box_hi[1] <= parent_ext[1])
                 inp[f'erf.nest{idom:d}.max_level'] = idom
                 inp[f'erf.nest{idom:d}.in_box_lo'] = in_box_lo
                 inp[f'erf.nest{idom:d}.in_box_hi'] = in_box_hi
