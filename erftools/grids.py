@@ -240,7 +240,7 @@ class NestedGrids(object):
                        ymax + 0.5*Ly],
                       crs=self.proj)
 
-        ax.legend(loc='best', frameon=False)
+        ax.legend(loc='best', edgecolor='none', facecolor='white')
 
         return fig, ax
 
