@@ -330,7 +330,13 @@ class WRFInputDeck(object):
         inp['erf.pbl_type'] = self.physics.bl_pbl_physics
         for idom in range(max_dom):
             if self.physics.bl_pbl_physics[idom] != 'None':
-                km_opt = self.dynamics.km_opt[idom]
+                try:
+                    km_opt = self.dynamics.km_opt[idom]
+                except IndexError:
+                    km_opt = self.dynamics.km_opt[-1]
+                    self.log.warning(f'len(km_opt) < {max_dom}, '
+                                     f'selected km_opt={km_opt} on d{idom+1:02d}'
+                                     ' -- should double check this!')
                 if km_opt in ['Deardorff','Smagorinsky']:
                     self.log.warning(f'erf.pbl_type[{idom}]={self.physics.bl_pbl_physics[idom]}'
                                      f' selected with 3D diffusion'
@@ -737,7 +743,7 @@ def write_ascii_table(fpath, xyz, names=None):
 
 @click.command()
 @click.argument('namelist_input', type=click.Path(exists=True, readable=True))
-@click.argument('erf_input', type=click.Path(writable=True), required=False,
+@click.argument('new_erf_input', type=click.Path(writable=True), required=False,
                 default='inputs')
 @click.option('--wps',
               type=click.Path(exists=True, readable=True),
@@ -759,7 +765,7 @@ def write_ascii_table(fpath, xyz, names=None):
               help='Output path for surface roughnes map derived from the '
                    'wrfinput_d01 LU_INDEX field')
 
-def wrf_namelist_to_erf(namelist_input, erf_input,
+def wrf_namelist_to_erf(namelist_input, new_erf_input,
                         wps=None, init=None,
                         tslist=None,
                         write_z0=None):
@@ -767,6 +773,9 @@ def wrf_namelist_to_erf(namelist_input, erf_input,
 
     If a tslist file with lat,lon sampling locations is provided, then
     either --wps or --init must be specified.
+
+    Example: Generate inputs.erf from WRF and WPS namelists
+        wrf_namelist_to_erf --wps namelist.wps namelist.input inputs.erf
     """
     wrf = WRFInputDeck(namelist_input, wpsinput=wps, wrfinput=init, tslist=tslist)
     if write_z0 is not None:
@@ -774,4 +783,4 @@ def wrf_namelist_to_erf(namelist_input, erf_input,
             print('*** No roughness map written, need to specify --init ***')
         else:
             wrf.process_initial_conditions(write_z0=write_z0)
-    wrf.write_inputfile(erf_input)
+    wrf.write_inputfile(new_erf_input)
