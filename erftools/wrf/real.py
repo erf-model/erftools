@@ -282,7 +282,9 @@ class RealInit(object):
         self.phm = phm
 
         self.zlevels = self.phb / self.g
-        self.z_top = self.zlevels.isel(bottom_top_stag=-1).squeeze().item()
+        # a hybrid-coordinate top is a pressure surface, not a height, so this is 2-D over
+        # real terrain and .item() raises; report the highest top. z_top is not read downstream.
+        self.z_top = float(self.zlevels.isel(bottom_top_stag=-1).max())
 
 
 def blending_func(eta, etac=0.2):
