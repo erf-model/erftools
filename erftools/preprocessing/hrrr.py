@@ -513,6 +513,8 @@ class NativeHRRR(object):
             'QCLOUD',
             'QRAIN',
         ]
+        # ice species (QICE/QSNOW/QGRAUP), carried only when the snapshot provides them
+        unstag_interp_vars += [v for v in ('QICE', 'QSNOW', 'QGRAUP') if v in self.ds]
         for varn in unstag_interp_vars:
             inp[varn] = self.interpxy(varn, self.xg, self.yg, dtype=dtype)
 
@@ -593,6 +595,7 @@ class NativeHRRR(object):
                 'QCLOUD',
                 'QRAIN',
             ]
+            unstag_interp_vars += [v for v in ('QICE', 'QSNOW', 'QGRAUP') if v in self.ds]
             for varn in unstag_interp_vars:
                 ds[varn] = self.interpxy(varn, self.xg[idxs], self.yg[idxs], dtype=dtype)
             # T_B* is the perturbation MOIST potential temperature (THM), as WRF writes it
@@ -637,6 +640,7 @@ class NativeHRRR(object):
                       [bytes(self.datetime.strftime('%Y-%m-%d_%H:%M:%S'),'utf-8')])
         })
         output_vars = ['U','V','W','PH','T','MU','QVAPOR','QCLOUD','QRAIN']
+        output_vars += [v for v in ('QICE', 'QSNOW', 'QGRAUP') if v in self.ds]
         for varn in output_vars:
             for bname,idxs in bndry.items():
                 # get all the buffer region planes
