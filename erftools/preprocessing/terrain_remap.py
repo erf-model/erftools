@@ -28,7 +28,7 @@ Static land fields from any geo_em-style NetCDF: read_geogrid, check_geogrid_gri
 map_static_fields (the one geo_em -> wrfinput mapping; with lsm_fields also VEGFRA, SHDMIN,
 SHDMAX, LAI, ALBBCK, SNOALB and TMN), add_geogrid_land_fields.
 The soil state (TSLB, SMOIS, SH2O, ZS, DZS) comes from the HRRR GRIB file itself, see
-erftools.preprocessing.hrrr_land.
+erftools.preprocessing.hrrr_land; noahmp_input.add_noahmp_land_state writes all of it.
 
 Nothing in this module is used by NativeHRRR's own code paths.
 """

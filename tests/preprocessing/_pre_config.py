@@ -4,6 +4,7 @@ Data locations (environment variables), only for the tests that read real files:
   ERFTOOLS_HRRR_GRIB  an HRRR GRIB2 file (wrfnat or wrfsfc, f00)
   ERFTOOLS_HRRR_SOIL_GRIB  HRRR's RUC soil levels at the same time (TSOIL / SOILW messages
                       of wrfprsf00 in 2021 HRRR)
+  ERFTOOLS_WRFINPUT   an atmosphere-only wrfinput (no land state) for check_noahmp_inputs
 Tests that need data raise unittest.SkipTest when the data are not available. Every test
 file also runs as a plain script (python tests/preprocessing/test_*.py).
 """
@@ -21,11 +22,17 @@ except ImportError:  # running from a source checkout without an install
 
 HRRR_GRIB = os.environ.get("ERFTOOLS_HRRR_GRIB", "")
 HRRR_SOIL_GRIB = os.environ.get("ERFTOOLS_HRRR_SOIL_GRIB", "")
+WRFINPUT = os.environ.get("ERFTOOLS_WRFINPUT", "")
 
 
 def require_hrrr_grib():
     if not os.path.exists(HRRR_GRIB):
         raise unittest.SkipTest("HRRR GRIB2 file not available: %r (set ERFTOOLS_HRRR_GRIB)" % HRRR_GRIB)
+
+
+def require_wrfinput():
+    if not os.path.exists(WRFINPUT):
+        raise unittest.SkipTest("wrfinput not available: %r (set ERFTOOLS_WRFINPUT)" % WRFINPUT)
 
 
 def require_hrrr_soil_grib():
