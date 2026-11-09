@@ -136,6 +136,13 @@ class NativeHRRR(object):
         ds['SST']      = surf['t']
         ds['HGT']      = surf['orog']
         ds['PSFC']     = surf['sp']
+        # land-surface snow and canopy water, kept when the file has them (to_wrfinput does
+        # not write them; see hrrr_land.snow_from_hrrr): WEASD [kg/m2], SNOD [m],
+        # SNOWC [%] -> fraction, CNWAT [kg/m2]
+        for short, name, scale in (('sdwe', 'SNOW', 1.0), ('sde', 'SNOWH', 1.0),
+                                   ('snowc', 'SNOWC', 0.01), ('cnwat', 'CANWAT', 1.0)):
+            if short in surf:
+                ds[name] = surf[short] * scale
 
         if self.verbose:
             print(ds)

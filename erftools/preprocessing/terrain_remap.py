@@ -27,8 +27,8 @@ coupling and orientation conventions) are reused unchanged.
 Static land fields from any geo_em-style NetCDF: read_geogrid, check_geogrid_grid,
 map_static_fields (the one geo_em -> wrfinput mapping; with lsm_fields also VEGFRA, SHDMIN,
 SHDMAX, LAI, ALBBCK, SNOALB and TMN), add_geogrid_land_fields.
-Soil state (TSLB, SMOIS, SH2O, ZS, DZS) is NOT handled here, see
-soil_state_from_hrrr.
+The soil state (TSLB, SMOIS, SH2O, ZS, DZS) comes from the HRRR GRIB file itself, see
+erftools.preprocessing.hrrr_land.
 
 Nothing in this module is used by NativeHRRR's own code paths.
 """
@@ -566,8 +566,7 @@ def add_geogrid_land_fields(inp, geo, date, lsm_fields=False, dtype=np.float32, 
 
 
 def soil_state_from_hrrr(*args, **kwargs):
-    """TODO (out of scope): soil state for an LSM run -- TSLB, SMOIS, SH2O, ZS, DZS from
-    HRRR's RUC LSM levels (0, 1, 4, 10, 30, 60, 100, 160, 300 cm) interpolated to the
-    target LSM's soil layers and adjusted for the terrain change. Not implemented: ERF reads
-    these only with an LSM, and none is written by this module."""
-    raise NotImplementedError('soil state (TSLB/SMOIS/SH2O/ZS/DZS) from HRRR is not implemented')
+    """Soil state for an LSM run (TSLB, SMOIS, SH2O, ZS, DZS) from HRRR's RUC soil levels:
+    see erftools.preprocessing.hrrr_land.soil_state_from_hrrr, which this calls."""
+    from .hrrr_land import soil_state_from_hrrr as _soil
+    return _soil(*args, **kwargs)
