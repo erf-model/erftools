@@ -160,7 +160,22 @@ SLOPE_LIMITED = {
     ],
 }
 
-PRESETS = {"wps_equivalent": WPS_EQUIVALENT, "slope_limited": SLOPE_LIMITED}
+# --------------------------------------------------------------------------
+# slope_limited_3dep: slope_limited with terrain from USGS 3DEP 1" (~30 m) GeoTIFF tiles
+# --------------------------------------------------------------------------
+# Directory of USGS_1_<tile>.tif files: the ERFTOOLS_GEOG_3DEP_PATH environment variable (no default)
+DEP3_ROOT = os.environ.get("ERFTOOLS_GEOG_3DEP_PATH", "")
+SLOPE_LIMITED_3DEP = copy.deepcopy(SLOPE_LIMITED)
+SLOPE_LIMITED_3DEP["name"] = "slope_limited_3dep"
+SLOPE_LIMITED_3DEP["description"] = ("slope_limited, but terrain = area mean of USGS 3DEP 1\" (~30 m) over the model cell "
+                            "(16 x 16 sub-grid) + the same slope-limited filter (max 0.5 m/m); 3DEP vertical "
+                            "datum NAVD88, horizontal NAD83 (treated as WGS84, < 2 m)")
+SLOPE_LIMITED_3DEP["fields"][0] = dict(name="HGT_M", kind="continuous", source=DEP3_ROOT, method="area_mean",
+                              opts={"supersample": 16, "fill": "nearest_valid"}, fill_missing=0.0,
+                              filter={"name": "slope_limited", "max_slope": 0.5, "kappa": 0.2},
+                              extras=["HGT_M_RAW", "HGT_M_STD", "SLOPE"])
+
+PRESETS = {"wps_equivalent": WPS_EQUIVALENT, "slope_limited": SLOPE_LIMITED, "slope_limited_3dep": SLOPE_LIMITED_3DEP}
 
 
 def get(name):

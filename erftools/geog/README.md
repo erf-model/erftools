@@ -83,6 +83,19 @@ Lambert conformal is implemented. Other `map_proj` values raise `NotImplementedE
 Then dispatch to it in `dataset.open_source()`. The non-WPS methods use only this interface.
 The `wps` method also needs `tile_of`, `read_tile` and the REAL*4 `ll_to_xy`.
 
+**GeoTIFF sources** (`geotiff.GeoTiffMosaic`): `open_source()` picks this reader for a directory
+with no `index` file that holds `*.tif` tiles.
+- **Accepted tiles:** single-band float32 GeoTIFFs in a geographic CRS whose pixels lie on one 1/N-degree
+  lattice, for example USGS 3DEP 1″ `USGS_1_n39w107.tif`.
+- **Decoding:** Pillow, which is already in the environment, with `tifffile` as the fallback.
+- **Overlaps:** tile overlaps must agree; `check_overlaps()` reports any disagreement.
+- **Methods:** non-WPS only.
+- **Preset:** `slope_limited_3dep` is `slope_limited` with HGT_M = `area_mean` (16 × 16 sub-grid) of 3DEP 1″, and the
+  same slope-limited filter. Tiles live in the directory named by `ERFTOOLS_GEOG_3DEP_PATH`
+  (no default).
+- **Datums:** 3DEP's horizontal datum is NAD83 and its vertical datum NAVD88. NAD83 is used as WGS84
+  (< 2 m apart here).
+
 ## Per-field algorithms
 
 ### `wps_equivalent` (transcribed from GEOGRID.TBL `default` entries, run in REAL*4)

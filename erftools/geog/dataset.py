@@ -258,6 +258,9 @@ def open_source(path):
     if path not in _REGISTRY:
         if os.path.exists(os.path.join(path, "index")):
             _REGISTRY[path] = GeogridTiles(path)
+        elif any(f.lower().endswith((".tif", ".tiff")) for f in os.listdir(path)):
+            from .geotiff import GeoTiffMosaic
+            _REGISTRY[path] = GeoTiffMosaic(path)
         else:
             raise ValueError("no reader for source %s" % path)
     return _REGISTRY[path]
