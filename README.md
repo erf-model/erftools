@@ -55,6 +55,16 @@ From the command line, the grid geometry can be read from an ERF input file and 
 plotgrids inputs --latlon0 35.85 -123.72 --truelat1 36.05 --standlon -65.0
 ```
 
+### Static fields without WPS (geo_em from WPS_GEOG tiles)
+`erftools.geog` builds a geo_em-compatible file (terrain, land use, soil, vegetation)
+for a Lambert-conformal grid directly from the WPS_GEOG_V4 tiles. The preset
+`wps_equivalent` reproduces geogrid; `slope_limited` is a conservative, slope-limited
+alternative. See `erftools/geog/README.md`.
+```shell
+python -m erftools.geog --preset slope_limited --landuse modis --grid namelist.wps --out geo_em.d01.nc
+```
+Tests: `pytest tests/geog` (data-dependent tests skip unless `WPS_GEOG_PATH` exists).
+
 ### Postprocessing Data Logs
 Data logs are output with the `erf.data_log` param and can include time
 histories of surface conditions and planar averaged profiles (e.g., for
